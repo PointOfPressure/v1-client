@@ -501,7 +501,7 @@
       e.preventDefault(); const ch = chan(c.dataset.c);
       const items = [['Mark As Read', () => { S.unread.delete(c.dataset.c); renderChannels(); renderRail(); }], ['Copy Link', () => copy(`https://discord.com/channels/${S.gid}/${c.dataset.c}`)]];
       if (S.gid !== DMG) items.push(['-'], ['Edit Channel', () => editChannel(c.dataset.c)], ['Create Channel', () => createChannel(ch?.parent)]);
-      if (ch?.manage) items.push(['Delete Recent Messages…', () => purge(c.dataset.c)]);
+      if (ch?.manage) items.push(['Purge Messages…', () => purge(c.dataset.c), 'red']);
       if (S.gid !== DMG) items.push(['Delete Channel', () => deleteChannel(c.dataset.c), 'red']);
       items.push(['-'], ['Copy Channel ID', () => copy(c.dataset.c)]);
       menu(e, items);
@@ -525,7 +525,7 @@
     M_(`channels/${id}`, 'DELETE').then(() => toast('Deleted'), (x) => toast(x.message, true));
   }
   async function purge(id) {
-    const n = await ask({ title: 'Delete Recent Messages', body: 'Deletes the newest messages in this channel (up to 100, younger than 14 days).', input: { label: 'How many', value: '10' }, ok: 'Delete', danger: true });
+    const n = await ask({ title: 'Purge Messages', body: 'Bulk-deletes the newest messages in this channel for everyone. Discord allows up to 100 at a time, and only messages younger than 14 days.', input: { label: 'How many', value: '10' }, ok: 'Delete', danger: true });
     if (!n) return;
     api('POST', `/channels/${id}/purge`, { count: +n }).then((r) => toast(`Deleted ${r.deleted}`), (x) => toast(x.message, true));
   }
@@ -1867,7 +1867,7 @@
   addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, #log, #chans, #members, .menu')) e.preventDefault(); });
   const MI = [[/^Profile/, 'people1'], [/^Mention/, 'at'], [/^Message$|Open Chat/, 'chat'], [/^Roles/, 'shield'], [/Nickname/, 'edit'], [/^Timeout|timeout/, 'clock'], [/^Kick/, 'kick'], [/^Ban/, 'hammer'],
     [/Copy .*ID/, 'idcard'], [/^Reply/, 'reply'], [/Reaction/, 'smile'], [/^Edit/, 'edit'], [/^Copy Text|^Copy$/, 'copy'], [/Pin/, 'pin'], [/^Translate/, 'translate'], [/^Forward/, 'fwdi'],
-    [/Thread/, 'threads'], [/^Delete|Remove timeout|Remove from history|Remove Message History/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
+    [/Thread/, 'threads'], [/^Delete|^Purge|Remove timeout|Remove from history|Remove Message History/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
     [/^Create Category/, 'folder'], [/^Upload/, 'file'], [/Poll/, 'poll'], [/Embed/, 'embed'], [/Sticker/, 'sticker'], [/TTS/, 'speakerS'], [/Embeds/, 'embed'], [/Send As/, 'people1'], [/^Join/, 'speakerS'],
     [/^Disconnect/, 'leave'], [/^Publish/, 'announceS'], [/^Search Image/, 'search'], [/^Open Image/, 'image'], [/Emoji/, 'smile'], [/Add to Favourites|Remove from Favourites/, 'star'], [/^Pin$|^Unpin$/, 'pin']];
   const menuIcon = (l) => { for (const [re, k] of MI) if (re.test(l)) return I[k] || ''; return ''; };
