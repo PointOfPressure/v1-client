@@ -285,7 +285,7 @@ function ser(m) {
     webhook: !!m.webhookId, pinned: !!m.pinned, nonce: m.nonce ?? null,
     reply: m.reference?.messageId ? { id: m.reference.messageId, author: ref ? who(ref.author, guild) : null,
       content: ref ? (ref.content || (ref.attachments.size ? 'attachment' : ref.embeds.length ? 'embed' : '')) : null } : null,
-    attachments: [...m.attachments.values()].map((a) => ({ url: a.url, proxy: a.proxyURL, name: a.name, size: a.size, type: a.contentType, w: a.width, h: a.height, spoiler: a.spoiler,
+    attachments: [...m.attachments.values()].map((a) => ({ id: a.id, url: a.url, proxy: a.proxyURL, name: a.name, size: a.size, type: a.contentType, w: a.width, h: a.height, spoiler: a.spoiler,
       waveform: a.waveform ?? null, duration: a.duration ?? null })),
     voiceMsg: m.flags?.has?.(MessageFlags.IsVoiceMessage) ?? false,
     embeds: m.embeds.map((e) => e.toJSON()),
@@ -372,7 +372,7 @@ function send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); 
 function broadcast(obj) { const s = JSON.stringify(obj); for (const ws of sockets) if (ws.readyState === 1) ws.send(s); }
 
 function onGifWarm(on) {
-  on(Events.MessageCreate, (m) => { if (m.guildId || isDM(m.channel)) warmMessage(m); });
+  on(Events.MessageCreate, (m) => { if (m.guildId || isDM(m.channel)) { warmMessage(m); attKeep(m); } });
   on(Events.MessageUpdate, (_b, m) => { if (m.embeds?.length) warmMessage(m); }); // Discord adds GIF embeds a moment after the message
 }
 function hookEvents(on) {
@@ -920,6 +920,45 @@ function gifWarm(src, w = 400) {
   const job = new Promise((ok) => gifQueue.push({ src, out, w, done: ok })); gifJobs.set(out, job); gifRun(); job.finally(() => gifJobs.delete(out));
 }
 function warmMessage(m) { for (const e of m.embeds || []) if (e.data?.type === 'gifv' && e.video) gifWarm(e.video.proxyURL || e.video.url); }
+// MessageLogger: Discord deletes a message's files along with it, so V1 keeps a copy of each image/clip as it
+// arrives (10 MB each at most, 500 MB total, oldest out). The client switches a deleted message's files to /att/<id>.
+const ATT_DIR = path.join(__dirname, 'attcache');
+fs.mkdirSync(ATT_DIR, { recursive: true });
+const ATT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
+const ATT_TYPE = Object.fromEntries(Object.entries(ATT_EXT).map(([t, e]) => [e, t]));
+const attQ = []; let attBusy = 0;
+function attKeep(m) {
+  for (const a of m.attachments?.values() ?? []) {
+    const ext = ATT_EXT[(a.contentType || '').split(';')[0]];
+    if (ext && a.size <= 10e6) attQ.push({ url: a.url, out: path.join(ATT_DIR, `${a.id}.${ext}`) });
+  }
+  attRun();
+}
+function attRun() {
+  while (attBusy < 2 && attQ.length) {
+    const { url, out } = attQ.shift(); if (fs.existsSync(out)) continue;
+    attBusy++;
+    fetch(url).then(async (r) => { if (!r.ok) return; fs.writeFileSync(out + '.part', Buffer.from(await r.arrayBuffer())); fs.renameSync(out + '.part', out); })
+      .catch(() => {}).finally(() => { attBusy--; attRun(); });
+  }
+}
+function attTrim() {
+  try {
+    const files = fs.readdirSync(ATT_DIR).map((f) => { const p2 = path.join(ATT_DIR, f); const st = fs.statSync(p2); return { p: p2, t: st.mtimeMs, n: st.size }; }).sort((a, b) => a.t - b.t);
+    let total = files.reduce((a, f) => a + f.n, 0);
+    for (const f of files) { if (total < 500e6) break; fs.rmSync(f.p, { force: true }); total -= f.n; }
+  } catch { /* fine */ }
+}
+setInterval(attTrim, 3600e3).unref();
+function serveAtt(req, res, url) {
+  if (!keyOk(url.searchParams.get('k') || '')) { res.writeHead(401); return res.end(); }
+  const id = (url.pathname.split('/')[2] || '').replace(/\D/g, '');
+  for (const ext of Object.keys(ATT_TYPE)) {
+    const f = path.join(ATT_DIR, `${id}.${ext}`);
+    if (id && fs.existsSync(f)) { res.writeHead(200, { 'Content-Type': ATT_TYPE[ext], 'Cache-Control': 'private, max-age=31536000, immutable' }); return fs.createReadStream(f).pipe(res); }
+  }
+  res.writeHead(404); res.end('not kept');
+}
 function serveGif(req, res, url) {
   const src = url.searchParams.get('u') || ''; const w = Math.max(64, Math.min(640, Number(url.searchParams.get('w')) || 400));
   let host = ''; try { host = new URL(src).hostname; } catch { /* */ }
@@ -1050,6 +1089,7 @@ function start() {
     if (!lanOk(req)) { req.socket.destroy(); return; }
     if (req.method === 'OPTIONS') { res.writeHead(204, cors()); return res.end(); }
     if (req.method === 'GET' && req.url.startsWith('/gif?')) return serveGif(req, res, new URL(req.url, 'http://x'));
+    if (req.method === 'GET' && req.url.startsWith('/att/')) return serveAtt(req, res, new URL(req.url, 'http://x'));
     if (req.method === 'GET' && !req.url.startsWith('/api/')) return serveStatic(req, res);
     if (!keyOk((req.headers.authorization || '').replace(/^Bearer /, ''))) return reply(res, 401, { error: 'no' });
     try { await route(req, res); } catch (e) {

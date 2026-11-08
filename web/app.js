@@ -1371,7 +1371,9 @@
   function delMsg(cid, id) { // MessageLogger: deleted messages stay, marked red
     const m = findMsg(cid, id); if (!m) return;
     if (!on('MessageLogger') || m.author.id === S.me.id) { const list = S.msgs.get(cid); list.splice(list.indexOf(m), 1); if (cid === S.cid) $(`.msg[data-id="${id}"]`)?.remove(); return; }
-    m.deleted = true; rerender(m);
+    m.deleted = true;
+    for (const a of m.attachments) if (a.id && /^(image|video)\//.test(a.type || '')) { a.url = a.proxy = `${API}/att/${a.id}?k=${encodeURIComponent(KEY)}`; } // V1 kept a copy; Discord's is gone
+    rerender(m);
   }
   function setReaction(cid, id, r) {
     const m = findMsg(cid, id); if (!m) return;
