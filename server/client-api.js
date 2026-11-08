@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 const { WebSocketServer } = require('ws');
-const { ChannelType, PermissionFlagsBits, Events, AttachmentBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ChannelType, PermissionFlagsBits, Events, AttachmentBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, OverwriteType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, StreamType, AudioPlayerStatus,
   VoiceConnectionStatus, EndBehaviorType, NoSubscriberBehavior, entersState } = require('@discordjs/voice');
 
@@ -32,6 +32,165 @@ function keyOk(k) {
   return b.length === KEY.length && crypto.timingSafeEqual(b, KEY);
 }
 const lanOk = (req) => LAN.test(req.socket.remoteAddress || '') && LAN.test(req.socket.localAddress || '');
+
+// ================================================================ bot-only extras ("Discord client +")
+const jsonFile = (name, def) => { const f = path.join(__dirname, name); return { get: () => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return def; } }, set: (v) => fs.writeFileSync(f, JSON.stringify(v)) }; };
+
+// ---- full-history index: every message V1 can read, backfilled politely, searchable with FTS5
+let IDX = null;
+function idxInit() {
+  if (IDX || !hooks.db) return IDX;
+  const db = hooks.db;
+  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS client_fts USING fts5(content, id UNINDEXED, guild UNINDEXED, channel UNINDEXED, author UNINDEXED, name UNINDEXED, ts UNINDEXED, tokenize='unicode61 remove_diacritics 2');
+    CREATE TABLE IF NOT EXISTS client_idx (channel TEXT PRIMARY KEY, oldest TEXT, done INTEGER DEFAULT 0, n INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS client_ids (id TEXT PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS client_names (user TEXT, kind TEXT, value TEXT, at INTEGER, PRIMARY KEY (user, kind, value));`);
+  IDX = { ins: db.prepare('INSERT INTO client_fts (content, id, guild, channel, author, name, ts) VALUES (?, ?, ?, ?, ?, ?, ?)'), seen: db.prepare('INSERT OR IGNORE INTO client_ids (id) VALUES (?)'),
+    state: db.prepare('SELECT oldest, done, n FROM client_idx WHERE channel = ?'), save: db.prepare('INSERT INTO client_idx (channel, oldest, done, n) VALUES (?, ?, ?, ?) ON CONFLICT(channel) DO UPDATE SET oldest = excluded.oldest, done = excluded.done, n = excluded.n'),
+    name: db.prepare('INSERT OR IGNORE INTO client_names (user, kind, value, at) VALUES (?, ?, ?, ?)') };
+  return IDX;
+}
+function idxMsg(m) {
+  if (!idxInit() || !m.guildId || !m.content) return false;
+  if (IDX.seen.run(m.id).changes === 0) return false;
+  IDX.ins.run(m.content, m.id, m.guildId, m.channelId, m.author?.id ?? '', m.member?.displayName ?? m.author?.globalName ?? m.author?.username ?? '', m.createdTimestamp);
+  return true;
+}
+let backfillBusy = false;
+async function backfillStep() { // one request at a time, ~3 per second: well inside a bot's read limits
+  if (backfillBusy || !idxInit()) return; backfillBusy = true;
+  try {
+    for (const g of client.guilds.cache.values()) {
+      const me = g.members.me;
+      const chans = [...g.channels.cache.values()].filter((c) => c.isTextBased?.() && !c.isThread?.() && c.viewable && c.permissionsFor(me)?.has(PermissionFlagsBits.ReadMessageHistory));
+      for (const c of chans) {
+        const st = IDX.state.get(c.id) || { oldest: null, done: 0, n: 0 };
+        if (st.done) continue;
+        const got = await c.messages.fetch({ limit: 100, ...(st.oldest ? { before: st.oldest } : {}), cache: false }).catch(() => null);
+        if (!got) { IDX.save.run(c.id, st.oldest, 1, st.n); continue; }
+        let n = st.n, oldest = st.oldest;
+        for (const m of got.values()) { if (idxMsg(m)) n++; if (!oldest || BigInt(m.id) < BigInt(oldest)) oldest = m.id; }
+        IDX.save.run(c.id, oldest, got.size < 100 ? 1 : 0, n);
+        return; // one fetch per step
+      }
+    }
+  } finally { backfillBusy = false; }
+}
+function idxStatus() {
+  if (!idxInit()) return { ready: false };
+  const rows = hooks.db.prepare('SELECT COUNT(*) c, SUM(done) d, SUM(n) n FROM client_idx').get();
+  const total = hooks.db.prepare('SELECT COUNT(*) c FROM client_ids').get().c;
+  return { channels: rows.c, finished: rows.d ?? 0, messages: total };
+}
+// search with Discord-style filters: from:name in:#channel has:link before:/after:YYYY-MM-DD
+function searchIndex(gid, q) {
+  const f = { from: null, in: null, has: null, before: null, after: null };
+  const words = [];
+  for (const tok of q.match(/\S+:"[^"]+"|\S+/g) || []) {
+    const mm = /^(from|in|has|before|after):"?([^"]+)"?$/i.exec(tok);
+    if (mm) f[mm[1].toLowerCase()] = mm[2]; else words.push(tok);
+  }
+  const g = client.guilds.cache.get(gid);
+  const where = ['guild = ?'], args = [gid];
+  if (words.length) { where.unshift('client_fts MATCH ?'); args.unshift(words.map((w) => '"' + w.replace(/"/g, '""') + '"').join(' ')); }
+  if (f.from && g) { const l = f.from.toLowerCase().replace(/^@/, ''); const ids = [...g.members.cache.values()].filter((m) => m.user.username.toLowerCase() === l || m.displayName.toLowerCase().includes(l)).map((m) => m.id); where.push(`author IN (${ids.map(() => '?').join(',') || "''"})`); args.push(...ids); }
+  if (f.in && g) { const l = f.in.toLowerCase().replace(/^#/, ''); const ids = [...g.channels.cache.values()].filter((c) => c.name.toLowerCase().includes(l)).map((c) => c.id); where.push(`channel IN (${ids.map(() => '?').join(',') || "''"})`); args.push(...ids); }
+  if (f.has === 'link') where.push("content LIKE '%http%'");
+  if (f.before) { const t = Date.parse(f.before); if (t) { where.push('CAST(ts AS INTEGER) < ?'); args.push(t); } }
+  if (f.after) { const t = Date.parse(f.after); if (t) { where.push('CAST(ts AS INTEGER) > ?'); args.push(t + 864e5); } }
+  if (!words.length && !f.from && !f.in && !f.has && !f.before && !f.after) return [];
+  return hooks.db.prepare(`SELECT id, channel, author, name, content, ts FROM client_fts WHERE ${where.join(' AND ')} ORDER BY CAST(ts AS INTEGER) DESC LIMIT 80`).all(...args);
+}
+
+// ---- name history: every nickname / display name / username V1 has seen a user use
+function noteNames(u, m) {
+  if (!idxInit() || !u) return;
+  const now = Date.now();
+  IDX.name.run(u.id, 'username', u.username, now);
+  if (u.globalName) IDX.name.run(u.id, 'display', u.globalName, now);
+  if (m?.nickname) IDX.name.run(u.id, 'nick:' + m.guild.id, m.nickname, now);
+}
+function nameHistory(uid) {
+  if (!idxInit()) return [];
+  const rows = hooks.db.prepare('SELECT kind, value, at FROM client_names WHERE user = ? ORDER BY at').all(uid);
+  const seen = hooks.db.prepare('SELECT name value, MIN(ts) at FROM seen WHERE author = ? AND name IS NOT NULL GROUP BY name').all(uid).map((r) => ({ kind: 'seen', value: r.value, at: r.at }));
+  const out = new Map();
+  for (const r of [...seen, ...rows]) { const k = r.value.toLowerCase(); if (!out.has(k) || r.at < out.get(k).at) out.set(k, { value: r.value, kind: r.kind.startsWith('nick') ? 'nickname' : r.kind === 'seen' ? 'name' : r.kind, at: r.at }); }
+  return [...out.values()].sort((a, b) => a.at - b.at);
+}
+
+// ---- scheduled messages
+const SCHED = jsonFile('client-schedule.json', []);
+async function schedTick() {
+  const list = SCHED.get(); const now = Date.now(); const due = list.filter((x) => x.at <= now);
+  if (!due.length) return;
+  SCHED.set(list.filter((x) => x.at > now));
+  for (const x of due) {
+    try { const ch = await client.channels.fetch(x.channelId); const m = await ch.send({ content: x.content, allowedMentions: { parse: ['users', 'roles', 'everyone'] } }); broadcast({ t: 'scheduledSent', id: x.id, channelId: x.channelId, messageId: m.id }); }
+    catch (e) { broadcast({ t: 'alert', kind: 'error', text: `A scheduled message couldn't be sent: ${e.message}` }); }
+  }
+}
+
+// ---- alerts: keywords, people coming online / joining voice, new accounts, raids
+const ALERTS = jsonFile('client-alerts.json', { keywords: [], users: {}, newAccounts: true, raid: true });
+const joinTimes = new Map();
+function alertHooks(on) {
+  on(Events.MessageCreate, (m) => {
+    if (!sockets.size || !m.guildId || m.author.bot || !m.content) return;
+    const kw = ALERTS.get().keywords || [];
+    const hit = kw.find((k) => k && new RegExp(`(^|\\W)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\W)`, 'i').test(m.content));
+    if (hit) broadcast({ t: 'alert', kind: 'keyword', keyword: hit, m: ser(m) });
+  });
+  on(Events.PresenceUpdate, (b, a) => {
+    const w = ALERTS.get().users?.[a.userId]; if (!w?.online || !sockets.size) return;
+    if ((b?.status ?? 'offline') === 'offline' && a.status !== 'offline') broadcast({ t: 'alert', kind: 'online', user: who(a.user ?? client.users.cache.get(a.userId), a.guild), guildId: a.guild?.id });
+  });
+  on(Events.VoiceStateUpdate, (b, a) => {
+    const w = ALERTS.get().users?.[a.id]; if (!w?.voice || !sockets.size || !a.channelId || b.channelId === a.channelId) return;
+    broadcast({ t: 'alert', kind: 'voice', user: who(a.member.user, a.guild), guildId: a.guild.id, channelId: a.channelId, channel: a.channel?.name });
+  });
+  on(Events.GuildMemberAdd, (m) => {
+    const cfg = ALERTS.get(); if (!sockets.size) return;
+    const age = Date.now() - m.user.createdTimestamp;
+    if (cfg.newAccounts && age < 7 * 864e5) broadcast({ t: 'alert', kind: 'newAccount', user: who(m.user, m.guild), guildId: m.guild.id, days: Math.floor(age / 864e5) });
+    const list = (joinTimes.get(m.guild.id) || []).filter((t) => Date.now() - t < 60000); list.push(Date.now()); joinTimes.set(m.guild.id, list);
+    if (cfg.raid && list.length === 5) broadcast({ t: 'alert', kind: 'raid', guildId: m.guild.id, guild: m.guild.name, count: list.length });
+  });
+  on(Events.GuildMemberUpdate, (b, a) => { if (b.nickname !== a.nickname) noteNames(a.user, a); });
+  on(Events.UserUpdate, (b, a) => noteNames(a));
+}
+
+// ---- interactive posts: role pickers and sign-up lists (buttons people can press)
+const SIGNUPS = jsonFile('client-signups.json', {});
+function signupEmbed(s2) {
+  return new EmbedBuilder().setColor(0x5865f2).setTitle(s2.title).setDescription(`${s2.desc ? s2.desc + '\n\n' : ''}${s2.people.length ? s2.people.map((id, i) => `${i + 1}. <@${id}>`).join('\n') : '*Nobody yet*'}`)
+    .setFooter({ text: `${s2.people.length}${s2.max ? ' / ' + s2.max : ''} signed up` });
+}
+const signupRow = () => new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('v1c:join').setLabel('Join').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId('v1c:leave').setLabel('Leave').setStyle(ButtonStyle.Secondary));
+async function handle(i) { // called from the bot's InteractionCreate before its own handlers
+  if (!i.isButton?.() || !i.customId.startsWith('v1c:')) return false;
+  const [, kind, arg] = i.customId.split(':');
+  try {
+    if (kind === 'role') {
+      const role = i.guild.roles.cache.get(arg); if (!role) { await i.reply({ content: 'That role no longer exists.', flags: MessageFlags.Ephemeral }); return true; }
+      const has = i.member.roles.cache.has(role.id);
+      if (has) await i.member.roles.remove(role, 'role picker'); else await i.member.roles.add(role, 'role picker');
+      await i.reply({ content: has ? `Removed **${role.name}**.` : `Gave you **${role.name}**.`, flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (kind === 'join' || kind === 'leave') {
+      const all = SIGNUPS.get(); const s2 = all[i.message.id];
+      if (!s2) { await i.reply({ content: 'This sign-up has closed.', flags: MessageFlags.Ephemeral }); return true; }
+      const had = s2.people.includes(i.user.id);
+      if (kind === 'join' && !had) { if (s2.max && s2.people.length >= s2.max) { await i.reply({ content: "It's full.", flags: MessageFlags.Ephemeral }); return true; } s2.people.push(i.user.id); }
+      if (kind === 'leave') s2.people = s2.people.filter((x) => x !== i.user.id);
+      SIGNUPS.set(all);
+      await i.update({ embeds: [signupEmbed(s2)], components: [signupRow()] });
+      return true;
+    }
+  } catch (e) { try { await i.reply({ content: "That didn't work: " + e.message, flags: MessageFlags.Ephemeral }); } catch { /* */ } return true; }
+  return false;
+}
 
 // ---------------------------------------------------------------- DMs
 // Bots can't list their DM channels, so remember who V1 has DMs with.
@@ -151,6 +310,7 @@ function chanInfo(ch) {
     topic: ch.topic ?? null, send: canSend(ch), nsfw: !!ch.nsfw,
     manage: !!(ch.guild && ch.permissionsFor(ch.guild.members.me)?.has(PermissionFlagsBits.ManageMessages)),
     rules: !!ch.guild && ch.id === ch.guild.rulesChannelId,
+    locked: !!ch.guild && !ch.isThread?.() && ch.permissionOverwrites?.cache.get(ch.guild.id)?.deny.has(PermissionFlagsBits.SendMessages),
     private: !!ch.guild && !ch.isThread() && !ch.permissionsFor(ch.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel),
     since: vcSince.get(ch.id) ?? null };
 }
@@ -183,6 +343,7 @@ function profileOf(g, uid) {
   return { ...who(u, g), status: m?.presence?.status ?? 'offline', joined: m?.joinedTimestamp ?? null, created: u.createdTimestamp,
     flags: u.flags?.toArray?.() ?? [], custom: acts.find((x) => x.type === 4)?.state ?? null,
     activity: act ? { type: act.type, name: act.name, details: act.details ?? null, state: act.state ?? null, since: act.timestamps?.start?.getTime?.() ?? null, image: act.assets?.largeImageURL?.() ?? null } : null,
+    names: nameHistory(uid).filter((x) => x.value !== (m?.displayName ?? u.globalName ?? u.username) && x.value !== u.username).slice(-8),
     guildIcon: g?.iconURL({ size: 32 }) ?? null, guildName: g?.name ?? null, canRoles: !!g?.members.me?.permissions.has(PermissionFlagsBits.ManageRoles),
     banner: u.bannerURL?.({ size: 512 }) ?? null, accent: u.hexAccentColor ?? null,
     roles: m ? [...m.roles.cache.values()].filter((r) => r.id !== g.id).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, name: r.name, color: r.color ? hex(r.color) : null })) : [] };
@@ -576,9 +737,40 @@ async function route(req, res) {
     }
     if (M === 'POST' && p[2]) { const f = approvals.get(p[2]); const b = await body(req); if (f) f(!!b.ok); broadcast({ t: 'approveGone', id: p[2] }); return reply(res, 200, { ok: !!f }); }
   }
+  if (p[1] === 'schedule') {
+    if (M === 'POST') { const b = await body(req); const x = { id: crypto.randomBytes(5).toString('hex'), channelId: b.channelId, content: String(b.content).slice(0, 2000), at: Number(b.at) }; if (!(x.at > Date.now())) throw new Error('Pick a time in the future.'); await textChannel(x.channelId); SCHED.set([...SCHED.get(), x]); return reply(res, 200, x); }
+    if (M === 'DELETE' && p[2]) { SCHED.set(SCHED.get().filter((x) => x.id !== p[2])); return reply(res, 200, { ok: true }); }
+    return reply(res, 200, { list: SCHED.get().map((x) => ({ ...x, channel: client.channels.cache.get(x.channelId)?.name ?? 'DM' })) });
+  }
+  if (p[1] === 'alerts') { if (M === 'POST') ALERTS.set({ ...ALERTS.get(), ...(await body(req)) }); return reply(res, 200, ALERTS.get()); }
+  if (M === 'GET' && p[1] === 'index') return reply(res, 200, idxStatus());
+  if (M === 'GET' && p[1] === 'names' && p[2]) return reply(res, 200, { names: nameHistory(p[2]) });
+  if (p[1] === 'voice' && p[2] && M === 'POST') { // move / mute / deafen / disconnect one person or everyone in a voice channel
+    const b = await body(req); const g = client.guilds.cache.get(p[2]); if (!g) throw Object.assign(new Error('no such server'), { code: 404 });
+    let targets = [];
+    if (b.userId) { const m = await g.members.fetch(b.userId); if (!m.voice.channelId) throw new Error("They're not in a voice channel."); targets = [m]; }
+    else if (b.channelId) targets = [...(g.channels.cache.get(b.channelId)?.members?.values() ?? [])].filter((m) => m.id !== client.user.id);
+    let n = 0;
+    for (const m of targets) {
+      if (b.action === 'move') await m.voice.setChannel(b.to, 'V1 Client');
+      else if (b.action === 'mute') await m.voice.setMute(!!b.on, 'V1 Client');
+      else if (b.action === 'deafen') await m.voice.setDeaf(!!b.on, 'V1 Client');
+      else if (b.action === 'disconnect') await m.voice.disconnect('V1 Client');
+      n++;
+    }
+    return reply(res, 200, { done: n });
+  }
   if (M === 'GET' && p[1] === 'search') {
     const q = String(url.searchParams.get('q') || '').trim(); const gid = url.searchParams.get('guild');
     if (!q || !hooks.db) return reply(res, 200, { results: [] });
+    let rows0 = []; try { rows0 = searchIndex(gid, q); } catch { /* bad FTS syntax: fall back */ }
+    if (rows0.length || /\b(from|in|has|before|after):/i.test(q)) {
+      const g0 = client.guilds.cache.get(gid);
+      return reply(res, 200, { index: idxStatus(), results: rows0.filter((r) => { const ch = client.channels.cache.get(r.channel); return ch && canSee(ch); }).map((r) => {
+        const u = client.users.cache.get(r.author);
+        return { id: r.id, channelId: r.channel, channel: client.channels.cache.get(r.channel)?.name, content: r.content, ts: Number(r.ts), author: u ? who(u, g0) : { id: r.author, name: r.name, avatar: null } };
+      }) });
+    }
     const rows = hooks.db.prepare("SELECT id, channel, author, name, content, ts FROM seen WHERE guild = ? AND content LIKE ? ESCAPE '\\' ORDER BY ts DESC LIMIT 50")
       .all(gid, '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%');
     const g = client.guilds.cache.get(gid);
@@ -659,6 +851,26 @@ async function route(req, res) {
         }
       }
     }
+    if (M === 'POST' && p[3] === 'rolepicker') {
+      const b = await body(req);
+      const rows = []; let row = new ActionRowBuilder();
+      for (const r of b.roles.slice(0, 25)) { if (row.components.length === 5) { rows.push(row); row = new ActionRowBuilder(); } const bt = new ButtonBuilder().setCustomId('v1c:role:' + r.id).setLabel(String(r.label || ch.guild.roles.cache.get(r.id)?.name || 'Role').slice(0, 80)).setStyle(ButtonStyle.Secondary); if (r.emoji) bt.setEmoji(r.emoji); row.addComponents(bt); }
+      if (row.components.length) rows.push(row);
+      const m = await ch.send({ content: b.text || 'Pick your roles:', components: rows, allowedMentions: { parse: [] } });
+      return reply(res, 200, { m: ser(m) });
+    }
+    if (M === 'POST' && p[3] === 'signup') {
+      const b = await body(req); const s2 = { title: String(b.title || 'Sign up').slice(0, 200), desc: String(b.desc || '').slice(0, 1000), max: Number(b.max) || 0, people: [] };
+      const m = await ch.send({ embeds: [signupEmbed(s2)], components: [signupRow()] });
+      const all = SIGNUPS.get(); all[m.id] = s2; SIGNUPS.set(all);
+      return reply(res, 200, { m: ser(m) });
+    }
+    if (M === 'POST' && p[3] === 'lock') { // lock / unlock: @everyone can't send
+      const b = await body(req);
+      await ch.permissionOverwrites.edit(ch.guild.roles.everyone, { SendMessages: b.on ? false : null }, { reason: 'V1 Client', type: OverwriteType.Role });
+      return reply(res, 200, { locked: !!b.on });
+    }
+    if (M === 'POST' && p[3] === 'clone') { const c2 = await ch.clone({ reason: 'V1 Client' }); return reply(res, 200, { id: c2.id }); }
     if (M === 'GET' && p[3] === 'viewers') { // who can see this channel (Discord's member list is per channel)
       if (!ch.guild) return reply(res, 200, { all: true, ids: [] });
       const ev = ch.permissionsFor(ch.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel);
@@ -884,10 +1096,15 @@ function start() {
 function setup(onAll, c, h) {
   client = c; hooks = h;
   hookEvents(onAll);
+  alertHooks(onAll);
+  onAll(Events.MessageCreate, (m) => { try { idxMsg(m); } catch { /* */ } });
   onAll(Events.ClientReady, () => {
+    setInterval(() => backfillStep().catch(() => {}), 350).unref();
+    setInterval(() => schedTick().catch(() => {}), 10000).unref();
+    setTimeout(() => { for (const g of client.guilds.cache.values()) for (const m of g.members.cache.values()) noteNames(m.user, m); }, 30000);
     setTimeout(() => { try { for (const g of JSON.parse(fs.readFileSync(path.join(__dirname, 'client-favgifs.json'), 'utf8')).slice(0, 300)) if (/\.(mp4|webm)(\?|$)/.test(g.src)) gifWarm(g.src, 220); } catch { /* none */ } }, 60000);
     for (const g of client.guilds.cache.values()) for (const st of g.voiceStates.cache.values()) if (st.channelId && !vcSince.has(st.channelId)) vcSince.set(st.channelId, Date.now());
     applyPresence(); dmList().catch((e) => console.error('client dms:', e.message)); });
 }
 
-module.exports = { setup, start: () => { KEY = loadKey(); start(); }, owns };
+module.exports = { setup, start: () => { KEY = loadKey(); start(); }, owns, handle };

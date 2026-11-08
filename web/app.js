@@ -266,6 +266,8 @@
       }
       case 'membersStale': VIEWERS.clear(); S.members.delete(d.guildId); if (d.guildId === S.gid) loadMembers(d.guildId); break;
       case 'dm': if (!S.dms.some((x) => x.id === d.dm.id)) { S.dms.unshift(d.dm); if (S.gid === DMG) renderChannels(); } break;
+      case 'alert': onAlert(d); break;
+      case 'scheduledSent': toast('Scheduled message sent'); break;
       case 'approve': {
         if (!CL.open) toggleClaude(true);
         const card = clAdd('appr', `<div class="aq">${I.hammer}<span>Claude wants to: <b>${esc(d.text)}</b></span></div><div class="ab"><button class="btn red" data-ap="1">Allow</button><button class="btn sec" data-ap="0">Deny</button></div>`);
@@ -495,12 +497,26 @@
       return;
     }
     const vc = e.target.closest('[data-vc]');
+    if (vc && S.gid !== DMG) {
+      e.preventDefault(); const id = vc.dataset.vc, g = S.guilds.get(S.gid); const n = (g.voice[id] || []).filter((m) => m.id !== S.me.id).length;
+      const V = (body, msg) => api('POST', `/voice/${S.gid}`, { channelId: id, ...body }).then((r) => toast(`${msg} (${r.done})`), (x) => toast(x.message, true));
+      const items = [[S.voice?.channelId === id ? 'Disconnect' : 'Join', () => (S.voice?.channelId === id ? leaveVoice() : joinVoice(id))], ['Open Chat', () => openChannel(id)], ['Edit Channel', () => editChannel(id)]];
+      if (n) items.push(['-'], ...g.channels.filter((c) => isVoice(c) && c.id !== id).map((c) => [`Move everyone to ${c.name}`, () => V({ action: 'move', to: c.id }, 'Moved')]),
+        ['Mute Everyone', () => V({ action: 'mute', on: true }, 'Muted')], ['Unmute Everyone', () => V({ action: 'mute', on: false }, 'Unmuted')], ['Disconnect Everyone', () => V({ action: 'disconnect' }, 'Disconnected'), 'red']);
+      items.push(['-'], ['Copy Channel ID', () => copy(id)]);
+      menu(e, items); return;
+    }
     if (vc) { e.preventDefault(); menu(e, [[S.voice?.channelId === vc.dataset.vc ? 'Disconnect' : 'Join', () => (S.voice?.channelId === vc.dataset.vc ? leaveVoice() : joinVoice(vc.dataset.vc))], ['Open Chat', () => openChannel(vc.dataset.vc)], ['Copy Channel ID', () => copy(vc.dataset.vc)]]); return; }
     const c = e.target.closest('[data-c]');
     if (c) {
       e.preventDefault(); const ch = chan(c.dataset.c);
       const items = [['Mark As Read', () => { S.unread.delete(c.dataset.c); renderChannels(); renderRail(); }], ['Copy Link', () => copy(`https://discord.com/channels/${S.gid}/${c.dataset.c}`)]];
       if (S.gid !== DMG) items.push(['-'], ['Edit Channel', () => editChannel(c.dataset.c)], ['Create Channel', () => createChannel(ch?.parent)]);
+      if (S.gid !== DMG) {
+        items.push([ch?.locked ? 'Unlock Channel' : 'Lock Channel', () => api('POST', `/channels/${c.dataset.c}/lock`, { on: !ch?.locked }).then((r) => { ch.locked = r.locked; toast(r.locked ? 'Locked: only people with extra permissions can talk' : 'Unlocked'); }, (x) => toast(x.message, true))]);
+        items.push(['Slowmode…', () => menu(e, [['Off', 0], ['5 seconds', 5], ['30 seconds', 30], ['1 minute', 60], ['5 minutes', 300], ['1 hour', 3600]].map(([l, sec]) => [l, () => M_(`channels/${c.dataset.c}`, 'PATCH', { slowmode: sec }).then(() => toast(sec ? `Slowmode: ${l}` : 'Slowmode off'), (x) => toast(x.message, true))]))]);
+        items.push(['Clone Channel', () => api('POST', `/channels/${c.dataset.c}/clone`).then(() => toast('Cloned'), (x) => toast(x.message, true))]);
+      }
       if (ch?.manage) items.push(['Purge Messages…', () => purge(c.dataset.c), 'red']);
       if (S.gid !== DMG) items.push(['Delete Channel', () => deleteChannel(c.dataset.c), 'red']);
       items.push(['-'], ['Copy Channel ID', () => copy(c.dataset.c)]);
@@ -823,6 +839,7 @@
         <div class="pname">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
         <div class="puser">${esc(p.tag || p.username)}${p.clan ? ' • ' + clanHTML(p) : ''}${badges ? `<span class="pbadges">${badges}</span>` : ''}</div>
         ${p.activity ? `<div class="pact2">${p.activity.image ? `<img src="${esc(p.activity.image)}" alt="">` : ''}<div><div>${actTxt}</div>${p.activity.details ? `<div class="sm">${esc(p.activity.details)}</div>` : ''}${p.activity.state ? `<div class="sm">${esc(p.activity.state)}</div>` : ''}</div></div>` : ''}
+        ${p.names?.length ? `<div class="psec"><h5>Previously known as</h5><div class="pnames">${p.names.slice().reverse().map((x) => `<span title="${esc(x.kind)} · first seen ${new Date(x.at).toLocaleDateString('en-GB')}">${esc(x.value)}</span>`).join('')}</div></div>` : ''}
         ${inVc ? `<div class="psec"><h5>In Voice</h5><div class="pvc">${I.speakerS}${esc(chan(inVc[0])?.name ?? '')}</div></div>` : ''}
         <div class="psec"><h5>Member Since</h5><div class="psince"><span>${I.dm}${new Date(p.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>${p.joined ? `<i class="psd"></i><span>${p.guildIcon ? `<img src="${esc(p.guildIcon)}" alt="">` : ''}${new Date(p.joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}</div></div>
         ${p.roles?.length || p.canRoles ? `<div class="psec"><h5>Roles</h5><div class="roles">${(p.roles || []).map((x) => `<span class="role" data-role="${x.id}"><i style="${x.color ? `background:${x.color}` : ''}"></i>${esc(x.name)}</span>`).join('')}${p.canRoles && p.id !== S.me.id ? `<button class="role add" data-pa="roles" title="Edit roles">${I.plus}</button>` : ''}</div></div>` : ''}
@@ -870,6 +887,8 @@
     const items = [['Profile', () => showProfile(uid, e.target.closest('[data-uid]') || e.target)], ['Mention', () => mention(uid, m?.name || 'user')]];
     if (!m?.bot && uid !== S.me.id) items.push(['Message', () => openDm(uid)]);
     if (inVoice && uid !== S.me.id) items.push(['__vol', uid]);
+    if (uid !== S.me.id) items.push(['Alerts…', () => alertPop(uid, e)]);
+    if (inVoice && uid !== S.me.id && S.gid !== DMG) items.push(['Voice…', () => voicePop(uid, e)]);
     if (uid !== S.me.id) items.push([NICK[uid] ? 'Edit Private Nickname' : 'Add Private Nickname', async () => { const v = await ask({ title: 'Private Nickname', body: 'Only you see this, in V1 Client.', input: { label: 'Nickname', value: NICK[uid] || '' }, ok: 'Save' }); if (v === null) return; if (v.trim()) NICK[uid] = v.trim(); else delete NICK[uid]; store.set('nicks', NICK); renderLog(); renderMembers(); renderChannels(); }]);
     if (S.gid !== DMG && uid !== S.me.id) items.push(['-'], ['Roles', () => rolesPop(uid, e)], ['Change Nickname', () => modAct(uid, 'nick')], ['Timeout', () => timeoutPop(uid, e)], ['Kick', () => modAct(uid, 'kick'), 'red'], ['Ban', () => modAct(uid, 'ban'), 'red']);
     items.push(['-'], ['Copy User ID', () => copy(uid)]);
@@ -908,6 +927,19 @@
         if (!add) ex?.remove();
       }, (x) => { toast(x.message, true); b2.classList.toggle('on', !add); });
     };
+  }
+  async function alertPop(uid, e) {
+    const a = await api('GET', '/alerts'); const w = (a.users || {})[uid] || {};
+    menu(e, [[(w.online ? '✓ ' : '') + 'Alert when they come online', () => setW({ ...w, online: !w.online })], [(w.voice ? '✓ ' : '') + 'Alert when they join voice', () => setW({ ...w, voice: !w.voice })]]);
+    function setW(v) { const users = { ...(a.users || {}) }; if (v.online || v.voice) users[uid] = v; else delete users[uid]; api('POST', '/alerts', { users }).then(() => toast('Alerts updated')); }
+  }
+  function voicePop(uid, e) {
+    const g = S.guilds.get(S.gid); const vcs = g.channels.filter(isVoice);
+    const V = (body, msg) => api('POST', `/voice/${S.gid}`, body).then(() => toast(msg), (x) => toast(x.message, true));
+    menu(e, [...vcs.map((c) => [`Move to ${c.name}`, () => V({ userId: uid, action: 'move', to: c.id }, 'Moved')]), ['-'],
+      ['Server Mute', () => V({ userId: uid, action: 'mute', on: true }, 'Muted')], ['Server Unmute', () => V({ userId: uid, action: 'mute', on: false }, 'Unmuted')],
+      ['Server Deafen', () => V({ userId: uid, action: 'deafen', on: true }, 'Deafened')], ['Server Undeafen', () => V({ userId: uid, action: 'deafen', on: false }, 'Undeafened')],
+      ['Disconnect', () => V({ userId: uid, action: 'disconnect' }, 'Disconnected'), 'red']]);
   }
   const memberById = (uid) => { for (const ms of S.members.values()) { const m = ms.byId.get(uid); if (m) return m; } return null; };
 
@@ -982,7 +1014,7 @@
       + `<button class="ico${muted ? ' off' : ''}" id="tmute" title="${muted ? 'Unmute channel' : 'Mute channel'}">${muted ? I.bellOff : I.bell}</button><button class="ico" id="tpins" title="Pinned messages">${I.pin}</button>`
       + (S.gid === DMG ? '' : `<button class="ico${S.showMembers ? ' on' : ''}" id="tmem" title="Member list">${I.people}</button>`)
       + (NATIVE && on('ClaudeAssistant') ? `<button class="ico${CL.open ? ' on' : ''}" id="tclaude" title="Claude">${I.spark}</button>` : '')
-      + (S.gid === DMG ? '' : `<div class="hsearch"><input id="hsq" placeholder="Search ${esc(S.guilds.get(S.gid)?.name ?? '')}" title="Type to filter members, Enter to search messages">${I.search}</div>`);
+      + (S.gid === DMG ? '' : `<div class="hsearch"><input id="hsq" placeholder="Search ${esc(S.guilds.get(S.gid)?.name ?? '')}" title="Type to filter members. Enter searches every message (from: in: has:link before: after:)">${I.search}</div>`);
     if (!c) { $('#chead').innerHTML = `<span class="sp"></span>${toggle}`; return; }
     const icon = c.type === CH.DM ? avatarHTML(c.dm.user, statusOf(c.dm.user.id), 24) : isVoice(c) ? I.speaker : I.hash;
     $('#chead').innerHTML = `${icon}<span class="nm">${esc(c.name)}</span>${c.topic ? `<span class="topic" title="${esc(c.topic)}">${MD.renderInline(c.topic)}</span>` : '<span class="sp"></span>'}${toggle}`;
@@ -997,7 +1029,8 @@
     api('GET', `/search?guild=${S.gid}&q=${encodeURIComponent(q)}`).then((r) => {
       const html = r.results.length ? r.results.map((m) => `<div class="pinm" data-sc="${m.channelId}" data-sm="${m.id}">${m.author.avatar ? `<img src="${esc(m.author.avatar)}" alt="">` : ''}<div><b>${esc(m.author.name)}</b> <span class="when">#${esc(m.channel || '')} · ${fmtWhen(m.ts)}</span><div class="markup">${esc(m.content).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), (x) => `<mark>${x}</mark>`)}</div></div></div>`).join('')
         : '<div class="empty">No results</div>';
-      const p = showPop(b.right - 420, b.bottom + 8, `<div class="pins"><h4>${r.results.length} result${r.results.length === 1 ? '' : 's'}</h4><div class="note" style="margin:-6px 4px 8px;font-size:12px">From V1's own message history</div>${html}</div>`);
+      const ix = r.index ? `${r.index.messages.toLocaleString()} messages indexed${r.index.finished < r.index.channels ? ` (still backfilling, ${r.index.finished}/${r.index.channels} channels done)` : ''}` : "From V1's saved history";
+      const p = showPop(b.right - 420, b.bottom + 8, `<div class="pins"><h4>${r.results.length} result${r.results.length === 1 ? '' : 's'}</h4><div class="note" style="margin:-6px 4px 8px;font-size:12px">${ix}. Filters: from:name in:channel has:link before:2026-01-01 after:2026-01-01</div>${html}</div>`);
       p.onclick = (ev) => { const x = ev.target.closest('[data-sm]'); if (x) { hidePop(); jumpTo(x.dataset.sm, x.dataset.sc); } };
     }, (x) => toast(x.message, true));
   });
@@ -1274,6 +1307,16 @@
     paintTypingRows();
   }
   const NT = Object.assign({ dm: true, mention: true, reply: true, role: true, everyone: false, reaction: true }, store.get('notifTypes', {}));
+  function onAlert(d) {
+    const g = S.guilds.get(d.guildId);
+    const say = (title, body, target) => { if (NATIVE) invoke('notify', { title, body, target }); sfx('message'); toast(title + (body ? ' · ' + body : '')); };
+    if (d.kind === 'keyword') say(`“${d.keyword}” in #${chan(d.m.channelId)?.name ?? ''}`, `${d.m.author.name}: ${d.m.content.slice(0, 140)}`, { guildId: d.m.guildId, channelId: d.m.channelId, id: d.m.id });
+    else if (d.kind === 'online') say(`${nickOf(d.user) || d.user.name} is online`, g?.name || '', null);
+    else if (d.kind === 'voice') say(`${nickOf(d.user) || d.user.name} joined voice`, `${d.channel} · ${g?.name || ''}`, { guildId: d.guildId, channelId: d.channelId });
+    else if (d.kind === 'newAccount') say(`New account joined ${g?.name || ''}`, `${d.user.name} (${d.user.username}), created ${d.days === 0 ? 'today' : d.days + ' day' + (d.days === 1 ? '' : 's') + ' ago'}`, null);
+    else if (d.kind === 'raid') say(`Possible raid in ${d.guild}`, `${d.count} people joined within a minute`, null);
+    else if (d.kind === 'error') toast(d.text, true);
+  }
   function notifyWhy(m) {
     if (m.author.id === S.me.id) return null;
     if (!m.guildId) return NT.dm ? 'dm' : null;
@@ -1764,7 +1807,8 @@
   $('#attach').innerHTML = I.plus;
   $('#attach').onclick = (e) => {
     const g = S.guilds.get(S.gid);
-    const items = [['Upload a File', () => $('#file').click()], ['Create Poll', openPollMaker], ['Create Embed', openEmbedMaker]];
+    const items = [['Upload a File', () => $('#file').click()], ['Create Poll', openPollMaker], ['Create Embed', openEmbedMaker], ['Schedule Message', scheduleMaker], ['Scheduled Messages', scheduledList]];
+    if (S.gid !== DMG) items.push(['Role Picker', rolePickerMaker], ['Sign-up List', signupMaker]);
     if (g?.stickers?.length) items.push(['Send a Sticker', () => stickerPop(e)]);
     items.push(['-'], [S.opts.tts ? 'TTS Message: on' : 'TTS Message', () => { S.opts.tts = !S.opts.tts; renderOpts(); }], [S.opts.noEmbeds ? 'Suppress Embeds: on' : 'Suppress Embeds', () => { S.opts.noEmbeds = !S.opts.noEmbeds; renderOpts(); }]);
     if (S.gid !== DMG && g?.webhooks) items.push([S.opts.as ? `Sending as ${S.opts.as.name}` : 'Send As…', sendAsPop]);
@@ -1820,6 +1864,48 @@
     box.querySelector('#eatt').onclick = () => { const r = read(); S.opts.embed = r.keep; S.opts.embedSend = r; close(); renderOpts(); };
     box.querySelector('#esend').onclick = async () => { const r = read(); if (!r.em.title && !r.em.description && !r.em.image) { toast('Give it a title, description or image', true); return; }
       try { await api('POST', `/channels/${S.cid}/messages`, { embeds: [r.em], buttons: r.buttons, as: S.opts.as }); close(); } catch (x) { toast(x.message, true); } };
+  }
+  // ---------- bot extras in the composer: scheduled messages, role pickers, sign-up lists
+  function modalForm(title, inner, okLabel, onOk) {
+    const box = document.createElement('div'); box.className = 'modal';
+    box.innerHTML = `<div class="mcard wide"><h2>${esc(title)}</h2>${inner}<div class="mact"><button class="sec" data-x>Cancel</button><button data-ok>${esc(okLabel)}</button></div></div>`;
+    document.body.append(box);
+    const close = () => box.remove();
+    box.onmousedown = (e) => { if (e.target === box || e.target.closest('[data-x]')) close(); };
+    box.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') close(); };
+    box.querySelector('[data-ok]').onclick = async () => { try { if (await onOk(box) !== false) close(); } catch (x) { toast(x.message, true); } };
+    fancySelects(box);
+    return box;
+  }
+  function scheduleMaker() {
+    const d = new Date(Date.now() + 3600e3); const pad = (n) => String(n).padStart(2, '0');
+    const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const box = modalForm('Schedule a message', `<label>Message<textarea id="sct" rows="4" maxlength="2000">${esc(ta.value)}</textarea></label><label>Send at<input id="scw" type="datetime-local" value="${local}"></label><div class="mtext">V1 sends it to #${esc(chan(S.cid)?.name ?? '')} at that time, even if this client is closed.</div>`, 'Schedule', async (b) => {
+      const content = convertOut(b.querySelector('#sct').value.trim()); const at = new Date(b.querySelector('#scw').value).getTime();
+      if (!content) throw new Error('Write something first.');
+      await api('POST', '/schedule', { channelId: S.cid, content, at });
+      if (ta.value.trim() === b.querySelector('#sct').value.trim()) { ta.value = ''; autosize(); }
+      toast('Scheduled for ' + fmtWhen(at));
+    });
+    box.querySelector('#sct').focus();
+  }
+  async function scheduledList() {
+    const r = await api('GET', '/schedule').catch((x) => { toast(x.message, true); return null; }); if (!r) return;
+    const box = modalForm('Scheduled messages', `<div class="tbl">${r.list.sort((a, b) => a.at - b.at).map((x) => `<div class="trow2"><b>${fmtWhen(x.at)}</b><span>#${esc(x.channel)}</span><span class="sctx">${esc(x.content.slice(0, 80))}</span><button class="ico danger" data-del="${x.id}" title="Cancel">${I.trash}</button></div>`).join('') || '<div class="note">Nothing scheduled</div>'}</div>`, 'Done', () => true);
+    box.querySelector('.tbl').onclick = async (e) => { const d = e.target.closest('[data-del]'); if (!d) return; await api('DELETE', `/schedule/${d.dataset.del}`); d.closest('.trow2').remove(); toast('Cancelled'); };
+  }
+  async function rolePickerMaker() {
+    let r; try { r = await api('GET', `/guilds/${S.gid}/members/${S.me.id}/roles`); } catch (x) { toast(x.message, true); return; }
+    const roles = r.roles.filter((x) => x.can);
+    modalForm('Role picker', `<label>Message<input id="rpt" value="Pick your roles:"></label><label>Roles people can give themselves</label><div class="rplist">${roles.map((x) => `<label class="rpr"><input type="checkbox" value="${x.id}"><i style="background:${x.color || '#99aab5'}"></i>${esc(x.name)}</label>`).join('') || '<div class="note">V1 can\'t assign any roles here.</div>'}</div><div class="mtext">Posts buttons; pressing one gives or removes that role.</div>`, 'Post', async (b) => {
+      const ids = [...b.querySelectorAll('.rplist input:checked')].map((x) => x.value); if (!ids.length) throw new Error('Pick at least one role.');
+      await api('POST', `/channels/${S.cid}/rolepicker`, { text: b.querySelector('#rpt').value, roles: ids.map((id) => ({ id })) });
+    });
+  }
+  function signupMaker() {
+    modalForm('Sign-up list', `<label>Title<input id="sut" value="Sign up"></label><label>Details<textarea id="sud" rows="3"></textarea></label><label>Spots (0 = no limit)<input id="sum" type="number" min="0" value="0"></label><div class="mtext">Posts a list with Join and Leave buttons that update live.</div>`, 'Post', async (b) => {
+      await api('POST', `/channels/${S.cid}/signup`, { title: b.querySelector('#sut').value, desc: b.querySelector('#sud').value, max: +b.querySelector('#sum').value });
+    });
   }
   function openPollMaker() {
     const box = document.createElement('div'); box.className = 'modal';
@@ -2294,7 +2380,9 @@
       return `<h1>Chat</h1>${toggleRow('p-embeds', 'Show embeds and link previews', PREF.embeds)}${toggleRow('p-st', 'Silent typing', S.silentTyping, 'Others do not see you typing')}${toggleRow('p-24', '24-hour time', PREF.hour24)}`;
     }
     if (k === 'notifications') {
-      return `<h1>Notifications</h1>${toggleRow('p-notif', 'Desktop notifications', on('NotificationsForDMs'), 'DMs and mentions, while the window is in the background or on another channel')}<h3>Notify me about</h3>${[['dm', 'Direct messages'], ['mention', '@mentions of V1'], ['reply', 'Replies to V1'], ['role', 'Mentions of V1\'s roles'], ['everyone', '@everyone and @here'], ['reaction', 'Reactions to V1\'s messages']].map(([k, l]) => toggleRow('nt-' + k, l, NT[k])).join('')}
+      return `<h1>Notifications</h1>${toggleRow('p-notif', 'Desktop notifications', on('NotificationsForDMs'), 'DMs and mentions, while the window is in the background or on another channel')}<h3>Alerts</h3><label class="lab">Keywords (one per line): notify me when anyone says these, in any channel V1 can see<textarea id="al-kw" class="ccss" rows="3" style="min-height:70px;font-family:var(--font)"></textarea></label>
+        <div id="al-rows"></div>
+        <h3>Notify me about</h3>${[['dm', 'Direct messages'], ['mention', '@mentions of V1'], ['reply', 'Replies to V1'], ['role', 'Mentions of V1\'s roles'], ['everyone', '@everyone and @here'], ['reaction', 'Reactions to V1\'s messages']].map(([k, l]) => toggleRow('nt-' + k, l, NT[k])).join('')}
         <div class="note">Muted channels (bell in the channel header) never notify.</div>
         <button class="btn sec" id="ntest" style="margin-top:12px">Send a test notification</button>
         <h3>Sounds <span id="sndv">${Math.round(SND.volume * 100)}%</span></h3><input type="range" min="0" max="100" id="sndvol" value="${Math.round(SND.volume * 100)}">
@@ -2399,6 +2487,14 @@
       q('#sndvol').oninput = (e) => { SND.volume = e.target.value / 100; q('#sndv').textContent = e.target.value + '%'; saveSnd(); };
       box.querySelector('.snds').onclick = (e) => { const b = e.target.closest('[data-play]'); if (b) { e.preventDefault(); const k = b.dataset.play, was = SND[k]; SND[k] = true; sfx(k); SND[k] = was; } };
       box.querySelector('.snds').onchange = (e) => { const k = e.target.dataset.snd; if (k) { SND[k] = e.target.checked; saveSnd(); } };
+      api('GET', '/alerts').then((a) => {
+        q('#al-kw').value = (a.keywords || []).join('\n');
+        q('#al-rows').innerHTML = toggleRow('al-new', 'New accounts joining', a.newAccounts, 'Accounts under a week old') + toggleRow('al-raid', 'Possible raids', a.raid, '5 or more joins within a minute')
+          + `<div class="note" style="margin-top:8px">Watching ${Object.keys(a.users || {}).length} people (set from someone's profile ⋯ menu).</div>`;
+        let t2; q('#al-kw').oninput = () => { clearTimeout(t2); t2 = setTimeout(() => api('POST', '/alerts', { keywords: q('#al-kw').value.split('\n').map((x) => x.trim()).filter(Boolean) }), 500); };
+        q('#al-new').onchange = (e) => api('POST', '/alerts', { newAccounts: e.target.checked });
+        q('#al-raid').onchange = (e) => api('POST', '/alerts', { raid: e.target.checked });
+      }).catch(() => {});
       for (const k of Object.keys(NT)) { const el = q('#nt-' + k); if (el) el.onchange = (e) => { NT[k] = e.target.checked; store.set('notifTypes', NT); }; }
       q('#ntest').onclick = () => notify({ author: S.me, guildId: null, content: 'Notifications work.', attachments: [] });
     }
