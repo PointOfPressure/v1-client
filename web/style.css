@@ -31,8 +31,8 @@
   --mention-bg: rgba(248, 163, 0, .08);
   --mention-bar: #f0b232;
   --code: #0a0a0c;
-  --font: "gg sans", "Noto Sans", Inter, system-ui, sans-serif, "Apple Color Emoji";
-  --mono: "gg mono", "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace, "Apple Color Emoji";
+  --font: "gg sans", "Noto Sans", Inter, system-ui, sans-serif, "Apple Color Emoji", "Noto Color Emoji";
+  --mono: "gg mono", "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace, "Apple Color Emoji", "Noto Color Emoji";
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -389,8 +389,8 @@ body.no-mav .mention .mav { display: none; }
 /* native Apple Color Emoji */
 .markup.jumbo { font-size: 2.6rem; line-height: 1.25; }
 .markup.jumbo .emoji { width: 48px; height: 48px; }
-.picker .grid button { font-family: "Apple Color Emoji"; }
-.ue { font-family: "Apple Color Emoji"; font-size: 16px; line-height: 1; }
+.picker .grid button { font-family: "Apple Color Emoji", "Noto Color Emoji"; }
+.ue { font-family: "Apple Color Emoji", "Noto Color Emoji"; font-size: 16px; line-height: 1; }
 .ue.big { font-size: 22px; width: 24px; text-align: center; }
 .compact .msg { margin-top: 2px; }
 .compact .msg > .pic { display: none; }
@@ -543,7 +543,7 @@ a.cbtn:hover { filter: brightness(1.15); }
 .ch.thr::after { content: ""; position: absolute; left: -14px; top: -6px; width: 12px; height: 20px; border-left: 2px solid #4e5058; border-bottom: 2px solid #4e5058; border-bottom-left-radius: 6px; }
 /* emoji picker tabs */
 .etabs { display: flex; gap: 2px; margin-bottom: 6px; }
-.etabs button { flex: 1; height: 30px; border-radius: 6px; font-family: "Apple Color Emoji"; font-size: 18px; }
+.etabs button { flex: 1; height: 30px; border-radius: 6px; font-family: "Apple Color Emoji", "Noto Color Emoji"; font-size: 18px; }
 .etabs button:hover { background: var(--raise); }
 .picker .grid { max-height: 320px; }
 .picker .grid.stk { grid-template-columns: repeat(4, 1fr); }
@@ -818,7 +818,7 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 .xscroll h4 { margin: 8px 4px 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
 .egrid2 { display: grid; grid-template-columns: repeat(9, 1fr); }
 .egrid2 h4 { grid-column: 1 / -1; }
-.egrid2 button { height: 44px; border-radius: 6px; display: grid; place-items: center; font: 26px "Apple Color Emoji"; }
+.egrid2 button { height: 44px; border-radius: 6px; display: grid; place-items: center; font: 26px "Apple Color Emoji", "Noto Color Emoji"; }
 .egrid2 button:hover { background: var(--raise); }
 .egrid2 img { width: 32px; height: 32px; object-fit: contain; }
 .sgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
@@ -832,7 +832,7 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 /* emoji picker v2 */
 .etop { position: relative; display: flex; gap: 6px; }
 .etop .xsearch { flex: 1; }
-.tonebtn { width: 34px; height: 34px; border-radius: 6px; font: 20px "Apple Color Emoji"; flex: none; }
+.tonebtn { width: 34px; height: 34px; border-radius: 6px; font: 20px "Apple Color Emoji", "Noto Color Emoji"; flex: none; }
 .tonebtn:hover { background: var(--raise); }
 .tonebar { position: absolute; right: 0; top: 38px; z-index: 3; display: flex; flex-direction: column; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
 .tonebar button { width: 34px; height: 34px; border-radius: 6px; font-size: 20px; }
@@ -847,7 +847,7 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 .egrid2 { grid-template-columns: repeat(9, 1fr); }
 .egrid2 button.sel { background: var(--sel); }
 .eprev { height: 44px; flex: none; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); margin-top: 6px; padding: 6px 4px 0; font-size: 14px; }
-.eprev .pbig { font: 28px "Apple Color Emoji"; width: 32px; text-align: center; }
+.eprev .pbig { font: 28px "Apple Color Emoji", "Noto Color Emoji"; width: 32px; text-align: center; }
 .eprev .pbig img { width: 30px; height: 30px; object-fit: contain; }
 .eprev b { font-weight: 600; }
 .eprev .psrc { margin-left: auto; font-size: 12px; font-weight: 500; }
@@ -1083,3 +1083,10 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 /* typing line floats above the box and takes no space */
 #dock #typing { position: absolute; left: 8px; right: 8px; bottom: calc(100% - 4px); height: 22px; margin: 0; }
 #dock #typing:empty { display: none; }
+
+/* embeds never run past the chat: cap at the space available and wrap long lines */
+.msg { min-width: 0; }
+.embed { max-width: min(516px, 100%) !important; min-width: 0; overflow: hidden; box-sizing: border-box; }
+.embed > *, .embed .edesc, .embed .ef, .embed .etitle { min-width: 0; overflow-wrap: anywhere; }
+.embed .markup pre { max-width: 100%; }
+.embed .markup pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
