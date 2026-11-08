@@ -15,7 +15,16 @@
   const report = (msg) => { try { fetch(API + '/api/log', { method: 'POST', headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ msg }) }); } catch { /* offline */ } };
   addEventListener('error', (e) => report(`${e.message} @ ${e.filename?.split('/').pop()}:${e.lineno}`));
   addEventListener('unhandledrejection', (e) => report('promise: ' + (e.reason?.message || e.reason)));
-  const copy = (t) => navigator.clipboard.writeText(t).then(() => toast('Copied'), () => toast('Copy failed', true));
+  // the page is http (from the bot's machine), where WebKit blocks navigator.clipboard: copy through a hidden textarea instead
+  const copy = (t) => {
+    const ok = () => toast('Copied'), fallback = () => {
+      const tx = document.createElement('textarea'); tx.value = t; tx.setAttribute('readonly', ''); tx.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.append(tx); tx.select(); tx.setSelectionRange(0, t.length);
+      let done = false; try { done = document.execCommand('copy'); } catch { /* */ }
+      tx.remove(); done ? ok() : toast('Copy failed: the clipboard is blocked here', true);
+    };
+    if (window.isSecureContext && navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(ok, fallback); else fallback();
+  };
 
   const P = (d, extra = '') => `<svg viewBox="0 0 24 24"${extra}><path fill="currentColor" fill-rule="evenodd" d="${d}"/></svg>`;
   const I = {
