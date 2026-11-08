@@ -1102,3 +1102,11 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .rrow.on .rcheck::after { content: ""; position: absolute; left: 4px; top: 0; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .menu.roles-pop .rrow svg { width: 14px; height: 14px; flex: none; }
 .menu.roles-pop .rrow.no { cursor: default; }
+/* image gallery */
+#lightbox .lbstage { width: 100%; height: 100%; display: grid; place-items: center; }
+#lightbox .lbstage img, #lightbox .lbstage video { max-width: 90vw; max-height: 88vh; border-radius: 4px; }
+.lbnav { position: fixed; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; background: #000a; border: 1px solid var(--line); display: grid; place-items: center; z-index: 2; }
+.lbnav svg { width: 22px; height: 22px; }
+.lbnav:hover { background: #000d; }
+.lbnav.prev { left: 24px; } .lbnav.next { right: 24px; }
+.lbcount { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); font-weight: 700; font-size: 14px; background: #000a; padding: 4px 12px; border-radius: 12px; }

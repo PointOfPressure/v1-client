@@ -1409,11 +1409,14 @@
     const pop = e.target.closest('[data-ytpop]'); if (pop) { invoke('play_external', { url: 'https://youtu.be/' + pop.dataset.ytpop }); return; }
     const ml = e.target.closest('.mlink'); if (ml) { jumpTo(ml.dataset.mm, ml.dataset.mc); return; }
     const th = e.target.closest('[data-thread]'); if (th) { openChannel(th.dataset.thread); return; }
-    const img = e.target.closest('.atts img, .eimg, .embed.media img');
-    if (img) { lightbox(img.dataset.full || img.src); return; }
-    const gi = e.target.closest('.gifimg'); if (gi && !e.target.closest('.gstar')) { lightbox(gi.dataset.full || gi.src); return; }
+    const img = e.target.closest('.atts img, .eimg, .embed.media img, .gifimg');
+    if (img && !e.target.closest('.gstar')) {
+      const all = [...(img.closest('.msg') || document).querySelectorAll('.atts img, .eimg, .embed.media img, .gifimg')];
+      lightbox(all.map((x) => x.dataset.full || x.src), Math.max(0, all.indexOf(img)));
+      return;
+    }
     const gv = e.target.closest('.embed.media video, .atts video.gifv');
-    if (gv && !e.target.closest('.gstar')) { lightbox(gv.dataset.src || gv.src, true); return; }
+    if (gv && !e.target.closest('.gstar')) { lightbox(gv.dataset.src || gv.src, 0, true); return; }
     const link = e.target.closest('a[href]');
     if (link) { e.preventDefault(); openUrl(link.href); }
   });
@@ -1515,20 +1518,40 @@
     if (NATIVE) { invoke('play_external', { url: 'https://youtu.be/' + id }); el.classList.add('playing'); toast('Opening in Celluloid'); setTimeout(() => el.classList.remove('playing'), 4000); return; }
     el.outerHTML = `<iframe class="ytf" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
   }
-  function lightbox(src, video) { // ImageZoom: wheel to zoom, drag to pan, click to close
+  function lightbox(srcs, start = 0, video = false) { // gallery: arrows/keys move, wheel zooms, drag pans, Esc or click outside closes
+    if (!Array.isArray(srcs)) srcs = [srcs];
+    let i = start;
     const lb = document.createElement('div'); lb.id = 'lightbox';
-    lb.innerHTML = video ? `<video src="${esc(src)}" autoplay loop muted playsinline></video><a class="lbopen" href="#">Open original</a>` : `<img src="${esc(src)}" alt=""><a class="lbopen" href="#">Open original</a>`;
-    lb.querySelector('.lbopen').onclick = (e) => { e.preventDefault(); e.stopPropagation(); openUrl(src); };
-    const onKey = (e) => { if (e.key === 'Escape') { lb.remove(); removeEventListener('keydown', onKey); } };
-    addEventListener('keydown', onKey);
-    const img = lb.firstChild; let z = 1, x = 0, y = 0, drag = null, moved = false;
-    const apply = () => { img.style.transform = `translate(${x}px, ${y}px) scale(${z})`; };
+    const many = srcs.length > 1;
+    lb.innerHTML = `<div class="lbstage"></div>${many ? `<button class="lbnav prev" title="Previous (←)">${I.back}</button><button class="lbnav next" title="Next (→)">${I.fwd}</button><div class="lbcount"></div>` : ''}<a class="lbopen" href="#">Open original</a>`;
+    const stage = lb.querySelector('.lbstage');
+    let z = 1, x = 0, y = 0, drag = null, moved = false, el = null;
+    const apply = () => { if (el) el.style.transform = `translate(${x}px, ${y}px) scale(${z})`; };
+    const show = () => {
+      z = 1; x = y = 0;
+      const src = srcs[i];
+      stage.innerHTML = video ? `<video src="${esc(src)}" autoplay loop muted playsinline></video>` : `<img src="${esc(src)}" alt="">`;
+      el = stage.firstChild; apply();
+      if (many) lb.querySelector('.lbcount').textContent = `${i + 1} / ${srcs.length}`;
+    };
+    const go = (d) => { i = (i + d + srcs.length) % srcs.length; show(); };
+    const close = () => { lb.remove(); removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (many && e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); go(1); }
+      else if (many && e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); go(-1); }
+    };
+    addEventListener('keydown', onKey, true);
+    lb.querySelector('.lbopen').onclick = (e) => { e.preventDefault(); e.stopPropagation(); openUrl(srcs[i]); };
+    if (many) { lb.querySelector('.prev').onclick = (e) => { e.stopPropagation(); go(-1); }; lb.querySelector('.next').onclick = (e) => { e.stopPropagation(); go(1); }; }
     lb.onwheel = (e) => { e.preventDefault(); if (!on('ImageZoom')) return; z = Math.max(1, Math.min(8, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15))); if (z === 1) x = y = 0; apply(); };
-    lb.onmousedown = (e) => { drag = [e.clientX - x, e.clientY - y]; moved = false; };
+    lb.onmousedown = (e) => { if (e.target.closest('.lbnav, .lbopen')) return; drag = [e.clientX - x, e.clientY - y]; moved = false; };
     lb.onmousemove = (e) => { if (drag && z > 1) { x = e.clientX - drag[0]; y = e.clientY - drag[1]; moved = true; apply(); } };
-    lb.onmouseup = () => { drag = null; if (!moved) lb.remove(); };
+    lb.onmouseup = (e) => { const wasDrag = moved; drag = null; if (!wasDrag && !e.target.closest('.lbnav, .lbopen') && (z === 1 || e.target === lb || e.target === stage)) close(); };
     document.body.append(lb);
+    show();
   }
+
 
   // ------------------------------------------------------------------ typing
   function renderTyping() {
