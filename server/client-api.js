@@ -89,7 +89,7 @@ function who(user, guild) {
   const nameplate = np?.asset ? { img: `https://cdn.discordapp.com/assets/collectibles/${np.asset}static.png`, palette: np.palette ?? null } : null;
   const cs = m?.presence?.clientStatus;
   const platforms = cs ? Object.keys(cs) : [];
-  return { id: user.id, name: m?.displayName ?? user.globalName ?? user.username, username: user.username, clan, deco, grad, roleIcon, roleIconName: ir?.name ?? null, nameplate, platforms,
+  return { id: user.id, name: m?.displayName ?? user.globalName ?? user.username, username: user.username, tag: user.discriminator && user.discriminator !== '0' ? `${user.username}#${user.discriminator}` : user.username, clan, deco, grad, roleIcon, roleIconName: ir?.name ?? null, nameplate, platforms,
     avatar: av.displayAvatarURL({ size: 64, extension: 'webp', forceStatic: true }), avatarAnim: animated ? av.displayAvatarURL({ size: 64, extension: 'webp' }) : null, decoAnim, bot: !!user.bot,
     color: m && m.displayColor ? hex(m.displayColor) : null };
 }
