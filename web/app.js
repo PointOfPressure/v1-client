@@ -2557,9 +2557,10 @@
       q('#reload').onclick = () => location.reload();
       const diag = async () => {
         const d = await api('GET', '/debug').catch((x) => ({ error: x.message }));
+        const ix = await api('GET', '/index').catch(() => null);
         const rows = [['Connection to V1', S.wsOk ? 'Live' : 'Reconnecting'], ['Round trip to the Pi', S.rtt != null ? S.rtt + ' ms' : 'join a call to measure'], ['V1 at', API],
           ['Voice engine', Voice.native ? 'Native (Opus, RNNoise, global push-to-talk)' : 'Browser'], ['In voice', d.voice ? `${chan(d.voice.channelId)?.name ?? d.voice.channelId} (${d.voice.status})` : 'No'],
-          ['Mic frames sent to V1', d.framesIn ?? '–'], ['Talk bursts', d.spurts ?? '–'], ['Typing signals sent', d.typing ?? 0], ['Channels cached', S.msgs.size],
+          ['Mic frames sent to V1', d.framesIn ?? '–'], ['Talk bursts', d.spurts ?? '–'], ['Typing signals sent', d.typing ?? 0], ['Message history indexed', ix?.messages != null ? `${ix.messages.toLocaleString()} messages (${ix.finished} channels finished, working through the rest)` : '–'], ['Channels cached', S.msgs.size],
           ['Messages in memory', [...S.msgs.values()].reduce((a2, l) => a2 + l.length, 0)], ['Servers', S.guilds.size], ['DMs', S.dms.length]];
         const el = q('#diag'); if (!el) return;
         el.innerHTML = rows.map(([a2, b2]) => `<div><span>${a2}</span><kbd>${esc(String(b2))}</kbd></div>`).join('');
