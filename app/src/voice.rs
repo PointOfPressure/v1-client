@@ -50,6 +50,8 @@ pub struct Shared {
     active: AtomicBool,
     users: Mutex<HashMap<u64, UserBuf>>,
     events: Mutex<Vec<Value>>,
+    share: Mutex<VecDeque<f32>>,   // one app's audio, mixed into what you send
+    sharing: AtomicBool,
 }
 impl Shared {
     fn event(&self, v: Value) { self.events.lock().push(v); }
@@ -66,7 +68,7 @@ impl Voice {
             sh: Arc::new(Shared {
                 settings: Mutex::new(Settings::default()), held: AtomicBool::new(false), sending: AtomicBool::new(false),
                 level: AtomicU32::new((-100f32).to_bits()), active: AtomicBool::new(false),
-                users: Mutex::new(HashMap::new()), events: Mutex::new(Vec::new()),
+                users: Mutex::new(HashMap::new()), events: Mutex::new(Vec::new()), share: Mutex::new(VecDeque::new()), sharing: AtomicBool::new(false),
             }),
         }
     }
@@ -244,7 +246,15 @@ fn audio(sh: Arc<Shared>, tx: tmpsc::UnboundedSender<Message>, stop: Arc<AtomicB
             let (mode, muted, deaf, thr) = { let s = sh.settings.lock(); (s.mode.clone(), s.muted, s.deaf, s.threshold) };
             let now = std::time::Instant::now();
             if db > thr { gate_until = now + Duration::from_millis(350); }
-            let tx_on = !muted && !deaf && if mode == "ptt" { sh.held.load(Ordering::Relaxed) } else { now < gate_until };
+            let mic_on = !muted && !deaf && if mode == "ptt" { sh.held.load(Ordering::Relaxed) } else { now < gate_until };
+            let sharing = sh.sharing.load(Ordering::Relaxed);
+            if !mic_on && sharing { for v in frame.iter_mut() { *v = 0.0; } } // only the app's audio
+            if sharing { // mix the shared app's audio in
+                let mut q = sh.share.lock();
+                for v in frame.iter_mut() { if let Some(x) = q.pop_front() { *v = (*v + x).clamp(-1.0, 1.0); } }
+                if q.len() > 48000 { let cut = q.len() - 9600; q.drain(..cut); }
+            }
+            let tx_on = mic_on || sharing;
             if tx_on != was_sending {
                 was_sending = tx_on;
                 sh.sending.store(tx_on, Ordering::Relaxed);
@@ -337,4 +347,51 @@ pub fn audio_devices() -> Value {
         "inputs": names(host.input_devices().ok().map(|i| i.collect())),
         "outputs": names(host.output_devices().ok().map(|i| i.collect())),
     })
+}
+
+// ---- share one app's audio into the call (PipeWire: capture that app's output stream only, so the call isn't echoed back)
+#[tauri::command]
+pub fn audio_apps() -> Value {
+    let out = std::process::Command::new("pw-dump").output().ok();
+    let mut apps = vec![];
+    if let Some(o) = out {
+        if let Ok(v) = serde_json::from_slice::<Value>(&o.stdout) {
+            for n in v.as_array().into_iter().flatten() {
+                let p = &n["info"]["props"];
+                if p["media.class"].as_str() != Some("Stream/Output/Audio") { continue; }
+                let app = p["application.name"].as_str().unwrap_or("").to_string();
+                if app.eq_ignore_ascii_case("v1-client") || app.is_empty() && p["node.name"].as_str().unwrap_or("").contains("v1") { continue; }
+                apps.push(json!({ "id": n["id"], "app": app, "media": p["media.name"].as_str().unwrap_or("") }));
+            }
+        }
+    }
+    json!(apps)
+}
+
+static SHARE_PID: std::sync::Mutex<Option<u32>> = std::sync::Mutex::new(None);
+#[tauri::command]
+pub fn share_audio(voice: State<'_, Voice>, id: Option<u64>) -> Result<bool, String> {
+    if let Some(pid) = SHARE_PID.lock().unwrap().take() { let _ = std::process::Command::new("kill").arg(pid.to_string()).status(); }
+    voice.sh.sharing.store(false, Ordering::SeqCst);
+    voice.sh.share.lock().clear();
+    let Some(id) = id else { return Ok(false) };
+    let mut child = std::process::Command::new("pw-record")
+        .args(["--target", &id.to_string(), "--rate", "48000", "--channels", "1", "--format", "f32", "-"])
+        .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn().map_err(|e| format!("couldn't capture that app: {e}"))?;
+    *SHARE_PID.lock().unwrap() = Some(child.id());
+    let mut out = child.stdout.take().unwrap();
+    let sh = voice.sh.clone();
+    sh.sharing.store(true, Ordering::SeqCst);
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = [0u8; 3840];
+        while let Ok(n) = out.read(&mut buf) {
+            if n == 0 { break; }
+            let mut q = sh.share.lock();
+            for c in buf[..n - n % 4].chunks_exact(4) { q.push_back(f32::from_le_bytes([c[0], c[1], c[2], c[3]]) * 0.8); }
+        }
+        sh.sharing.store(false, Ordering::SeqCst);
+        let _ = child.wait();
+    });
+    Ok(true)
 }

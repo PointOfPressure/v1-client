@@ -61,6 +61,28 @@ fn play_external(url: String) {
     if url.starts_with("https://") { let _ = std::process::Command::new("celluloid").arg(url).spawn(); }
 }
 
+// Memory guard: if the page process (and its swap) passes 1.2 GB, ask the page to reload at its next safe moment
+fn start_memory_guard(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let me = std::process::id();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            let mut kb = 0u64;
+            if let Ok(rd) = std::fs::read_dir("/proc") {
+                for e in rd.flatten() {
+                    let p = e.path();
+                    let stat = std::fs::read_to_string(p.join("stat")).unwrap_or_default();
+                    let ppid = stat.rsplit(')').next().and_then(|r| r.split_whitespace().nth(1)).and_then(|x| x.parse::<u32>().ok());
+                    if ppid != Some(me) { continue; }
+                    let st = std::fs::read_to_string(p.join("status")).unwrap_or_default();
+                    for l in st.lines() { if l.starts_with("VmRSS:") || l.starts_with("VmSwap:") { kb += l.split_whitespace().nth(1).and_then(|x| x.parse::<u64>().ok()).unwrap_or(0); } }
+                }
+            }
+            if kb > 1_200_000 { use tauri::Emitter; let _ = app.emit("v1-memory", serde_json::json!({ "mb": kb / 1024 })); }
+        }
+    });
+}
+
 // Claude panel: Claude Code (your subscription) with only V1's tools + web search/fetch. No shell or file tools.
 static CLAUDE_PID: std::sync::Mutex<Option<u32>> = std::sync::Mutex::new(None);
 #[tauri::command]
@@ -166,6 +188,8 @@ fn main() {
             clipboard_image,
             notify,
             voice::audio_devices,
+            voice::audio_apps,
+            voice::share_audio,
             voice::voice_join,
             voice::voice_leave,
             voice::voice_set,
@@ -182,6 +206,7 @@ fn main() {
                 .inner_size(1360.0, 820.0)
                 .min_inner_size(820.0, 480.0)
                 .decorations(false) // Discord-style title bar drawn by the page
+                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))?)?
                 .initialization_script(&init)
                 .on_navigation(move |u| {
                     let s = u.as_str();
@@ -198,6 +223,7 @@ fn main() {
                 });
             }
             voice::start_ptt(shared.clone());
+            start_memory_guard(app.handle().clone());
             voice::start_events(app.handle().clone(), shared.clone());
             Ok(())
         })

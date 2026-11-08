@@ -711,7 +711,7 @@
     const ms = g.voice[c.id] || [], here = S.voice?.channelId === c.id;
     grid.innerHTML = `<div class="tiles n${Math.min(ms.length, 9)}">${ms.map((m) => `<div class="tile" data-uid="${m.id}"><div class="tav">${avatarHTML(m, null, 80)}</div><div class="tname">${m.mute || m.deaf ? (m.deaf ? I.headOff : I.micOff) : ''}<span>${esc(m.name)}</span>${m.stream ? '<span class="live">LIVE</span>' : ''}</div></div>`).join('')
       || `<div class="callempty"><h2>${esc(c.name)}</h2><div>No one is here yet.</div></div>`}</div>
-      <div class="callbar">${here ? `<button class="cb${Voice.muted ? ' off' : ''}" data-cb="mute" title="Mute">${Voice.muted ? I.micOff : I.mic}</button><button class="cb${Voice.deaf ? ' off' : ''}" data-cb="deaf" title="Deafen">${Voice.deaf ? I.headOff : I.head}</button><button class="cb red" data-cb="leave" title="Disconnect">${I.leave}</button>`
+      <div class="callbar">${here ? `<button class="cb${Voice.muted ? ' off' : ''}" data-cb="mute" title="Mute">${Voice.muted ? I.micOff : I.mic}</button><button class="cb${Voice.deaf ? ' off' : ''}" data-cb="deaf" title="Deafen">${Voice.deaf ? I.headOff : I.head}</button>${NATIVE ? `<button class="cb${S.sharing ? ' sharing' : ''}" data-cb="share" title="${S.sharing ? 'Stop sharing ' + esc(S.sharing) : 'Share an app\'s audio'}">${I.speakerS}</button>` : ''}<button class="cb red" data-cb="leave" title="Disconnect">${I.leave}</button>`
         : '<button class="btn joinbtn" data-cb="join">Join Voice</button>'}<button class="cb${S.callChat ? ' on' : ''}" data-cb="chat" title="Show chat">${I.chat}</button></div>`;
     twe(grid); paintSpeaking();
   }
@@ -719,13 +719,13 @@
     const t = e.target.closest('.tile'); if (t && !e.target.closest('.callbar')) { showProfile(t.dataset.uid, t); return; }
     const b = e.target.closest('[data-cb]'); if (!b) return;
     const a = b.dataset.cb;
+    if (a === 'share') { shareAudioMenu(b); return; }
     if (a === 'join') joinVoice(S.cid);
     if (a === 'leave') leaveVoice();
     if (a === 'mute') $('#bmute').click();
     if (a === 'deaf') $('#bdeaf').click();
     if (a === 'chat') { S.callChat = !S.callChat; store.set('callChat', S.callChat); renderCall(); if (S.callChat) scrollBottom(); }
     renderCall();
-    if (VIEWERS.has(cid)) renderMembers(); else { renderMembers(); loadViewers(cid); }
   });
   $('#callgrid').addEventListener('contextmenu', (e) => { const t = e.target.closest('.tile'); if (t) { e.preventDefault(); userMenu(e, t.dataset.uid, true); } });
   function paintSpeaking() {
@@ -999,6 +999,7 @@
     renderChannels(); renderRail(); renderHead(); renderTyping(); renderTitle();
     const c = chan(cid);
     renderCall();
+    renderMembers(); loadViewers(cid); // member list shows only people who can see this channel
     ta.disabled = c && !c.send;
     ta.placeholder = c && !c.send ? 'V1 cannot send messages here' : c?.type === CH.DM ? `Message @${c.name}` : `Message ${isVoice(c) ? '' : '#'}${c?.name ?? ''}`;
     S.lru = [cid, ...S.lru.filter((x) => x !== cid)];
@@ -2240,12 +2241,23 @@
       await Voice.join(vcId, wsSend, () => ws);
     } catch (e) { toast('Voice: ' + (e.message || e), true); report('voice join: ' + (e.message || e)); S.joining = null; Voice.ended(); renderVoice(); }
   }
-  function leaveVoice() { Voice.leave(wsSend); if (!S.voice) { S.joining = null; renderVoice(); } }
+  async function shareAudioMenu(btn) {
+    const r = btn.getBoundingClientRect();
+    if (S.sharing) { await invoke('share_audio', { id: null }); S.sharing = null; renderCall(); toast('Stopped sharing audio'); return; }
+    const apps = await invoke('audio_apps').catch(() => []);
+    if (!apps.length) { toast('No app is playing audio right now. Start playback, then try again.'); return; }
+    menu({ clientX: r.left, clientY: r.top - 40 * Math.min(apps.length, 8) - 20 }, apps.map((x) => [`${x.app || 'App'}${x.media ? ' · ' + x.media.slice(0, 40) : ''}`, async () => {
+      try { await invoke('share_audio', { id: x.id }); S.sharing = x.app || 'audio'; renderCall(); toast(`Sharing ${S.sharing} into the call`); } catch (e) { toast(String(e), true); }
+    }]));
+  }
+  function leaveVoice() {
+    if (S.sharing) { invoke('share_audio', { id: null }); S.sharing = null; } Voice.leave(wsSend); if (!S.voice) { S.joining = null; renderVoice(); } }
   function onVoiceState(v, why) {
     const was = S.voice;
     S.voice = v; S.joining = null;
     if (v && !was) { S.voiceSince = Date.now(); sfx('connect'); }
     if (!v && was) sfx('disconnect');
+    if (!v && S.sharing) { invoke('share_audio', { id: null }); S.sharing = null; }
     if (!v) { if (Voice.active) Voice.ended(); S.speaking.clear(); S.selfSpeaking = false; if (why && why !== 'left' && was) toast('Voice ' + why); }
     renderVoice(); renderChannels(); renderCall();
   }
@@ -2741,6 +2753,7 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
 
   // ------------------------------------------------------------------ auto-refresh when a new UI is deployed, only when nothing is mid-way
   let myVersion = null, wantReload = false;
+  window.__TAURI__?.event?.listen?.('v1-memory', ({ payload }) => { if (!wantReload) { report(`memory guard: page at ${payload.mb} MB, reloading when safe`); wantReload = true; tryReload(); } });
   function noteVersion(v) { if (!myVersion) { myVersion = v; return; } if (v !== myVersion) { wantReload = true; tryReload(); } }
   function busy() {
     if (S.voice || S.joining || Voice.active) return 'in a call';

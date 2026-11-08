@@ -1141,3 +1141,4 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .mcard input[type=datetime-local] { color-scheme: dark; }
 .pnames { display: flex; flex-wrap: wrap; gap: 4px; }
 .pnames span { font-size: 13px; font-weight: 500; background: var(--raise); border-radius: 4px; padding: 2px 8px; }
+.cb.sharing { background: var(--good); border-color: var(--good); color: #fff; }

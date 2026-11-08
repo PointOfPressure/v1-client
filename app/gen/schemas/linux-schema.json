@@ -177,6 +177,12 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the audio_apps command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-audio-apps",
+          "markdownDescription": "Enables the audio_apps command without any pre-configured scope."
+        },
+        {
           "description": "Enables the audio_devices command without any pre-configured scope.",
           "type": "string",
           "const": "allow-audio-devices",
@@ -231,6 +237,12 @@
           "markdownDescription": "Enables the play_external command without any pre-configured scope."
         },
         {
+          "description": "Enables the share_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-share-audio",
+          "markdownDescription": "Enables the share_audio command without any pre-configured scope."
+        },
+        {
           "description": "Enables the voice_join command without any pre-configured scope.",
           "type": "string",
           "const": "allow-voice-join",
@@ -253,6 +265,12 @@
           "type": "string",
           "const": "allow-yt-stream",
           "markdownDescription": "Enables the yt_stream command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the audio_apps command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-audio-apps",
+          "markdownDescription": "Denies the audio_apps command without any pre-configured scope."
         },
         {
           "description": "Denies the audio_devices command without any pre-configured scope.",
@@ -307,6 +325,12 @@
           "type": "string",
           "const": "deny-play-external",
           "markdownDescription": "Denies the play_external command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the share_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-share-audio",
+          "markdownDescription": "Denies the share_audio command without any pre-configured scope."
         },
         {
           "description": "Denies the voice_join command without any pre-configured scope.",
