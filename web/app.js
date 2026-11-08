@@ -1265,6 +1265,17 @@
   new MutationObserver(() => { for (const v of document.querySelectorAll('#log video.lazyv:not([data-w])')) { v.dataset.w = 1; vio.observe(v); } }).observe($('#log'), { childList: true, subtree: true });
   // the message box floats over the chat (like Discord); keep the newest message clear of it
   new ResizeObserver(() => { const h = $('#dock').offsetHeight; const sc = $('#scroller'); const stick = nearBottom(); sc.style.paddingBottom = (h + 2) + 'px'; if (stick) scrollBottom(); }).observe($('#dock'));
+  // animated images (GIFs) hold every decoded frame in WebKit: unload them when they're well off screen so memory stays flat
+  const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+  const animIO = new IntersectionObserver((ents) => {
+    for (const en of ents) {
+      const im = en.target;
+      if (en.isIntersecting) { if (im.dataset.asrc) { im.src = im.dataset.asrc; delete im.dataset.asrc; } }
+      else if (im.src && im.src !== BLANK && !im.src.startsWith('data:')) { const r = im.getBoundingClientRect(); if (r.width && r.height) { im.style.width = r.width + 'px'; im.style.height = r.height + 'px'; } im.dataset.asrc = im.src; im.src = BLANK; }
+    }
+  }, { rootMargin: '800px 0px' });
+  const watchAnim = (root) => { for (const im of root.querySelectorAll('img.gifimg:not([data-aw]), .gifm img:not([data-aw]), .gtile img:not([data-aw]), .gcat img:not([data-aw])')) { im.dataset.aw = 1; animIO.observe(im); } };
+  new MutationObserver(() => watchAnim(document.body)).observe(document.body, { childList: true, subtree: true });
   let pinned = true;
   new ResizeObserver(() => { if (pinned) scrollBottom(); }).observe($('#log'));
   const nearBottom = () => { const s = $('#scroller'); return s.scrollHeight - s.scrollTop - s.clientHeight < 120; };
@@ -2137,7 +2148,7 @@
       }
       hidePop(); sendQuick({ content: t.dataset.gurl });
     };
-    return () => { io.disconnect(); mo.disconnect(); for (const v of root.querySelectorAll('video')) stopCapped(v); }; // pause only; tearing pipelines down mid-play is what WebKit chokes on
+    return () => { io.disconnect(); mo.disconnect(); for (const v of root.querySelectorAll('video')) stopCapped(v); for (const im of root.querySelectorAll('img')) { animIO.unobserve(im); im.src = BLANK; } root.innerHTML = ''; };
   }
   // ---------- emoji picker: frecency, favourites, ranked search, skin tones, keyboard, preview
   const FREQ = store.get('emojiFreq', {});
