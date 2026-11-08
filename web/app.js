@@ -811,7 +811,7 @@
         ${p.custom ? `<div class="pbubble">${esc(p.custom)}</div>` : ''}</div>
       <div class="pbody">
         <div class="pname">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
-        <div class="puser">${esc(p.username)}${p.clan ? ' • ' + clanHTML(p) : ''}${badges ? `<span class="pbadges">${badges}</span>` : ''}</div>
+        <div class="puser">${esc(p.tag || p.username)}${p.clan ? ' • ' + clanHTML(p) : ''}${badges ? `<span class="pbadges">${badges}</span>` : ''}</div>
         ${p.activity ? `<div class="pact2">${p.activity.image ? `<img src="${esc(p.activity.image)}" alt="">` : ''}<div><div>${actTxt}</div>${p.activity.details ? `<div class="sm">${esc(p.activity.details)}</div>` : ''}${p.activity.state ? `<div class="sm">${esc(p.activity.state)}</div>` : ''}</div></div>` : ''}
         ${inVc ? `<div class="psec"><h5>In Voice</h5><div class="pvc">${I.speakerS}${esc(chan(inVc[0])?.name ?? '')}</div></div>` : ''}
         <div class="psec"><h5>Member Since</h5><div class="psince"><span>${I.dm}${new Date(p.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>${p.joined ? `<i class="psd"></i><span>${p.guildIcon ? `<img src="${esc(p.guildIcon)}" alt="">` : ''}${new Date(p.joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}</div></div>
@@ -2231,7 +2231,7 @@
     if (k === 'account') {
       const [pr, me] = await Promise.all([api('GET', '/presence').catch(() => ({ status: 'online', activity: null })), api('GET', '/me').catch(() => null)]);
       const ban = me?.banner ? `background-image:url('${esc(me.banner)}')` : `background:${me?.accent || 'var(--accent)'}`;
-      return `<h1>My Account</h1><div class="acard"><div class="ban" style="${ban}"></div><div class="arow"><img src="${esc(me?.avatar || S.me.avatar)}" alt=""><div><div class="pname">${esc(S.me.name)} <span class="tag">APP</span></div><div>${esc(me?.username || S.me.username)}</div></div></div>
+      return `<h1>My Account</h1><div class="acard"><div class="ban" style="${ban}"></div><div class="arow"><img src="${esc(me?.avatar || S.me.avatar)}" alt=""><div><div class="pname">${esc(S.me.name)} <span class="tag">APP</span></div><div>${esc(S.me.tag || me?.username || S.me.username)}</div></div></div>
         <div class="afields">
           <div class="frow2"><div><h5>Username</h5>${esc(me?.username || '')}</div><button class="btn sec" data-edit="username">Edit</button></div>
           <div class="frow2"><div><h5>Avatar</h5>PNG, JPG or GIF</div><button class="btn sec" data-edit="avatar">Change</button></div>
@@ -2613,7 +2613,7 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
   // ------------------------------------------------------------------ me bar
   function renderMe() {
     if (!S.me) return;
-    $('#meid').innerHTML = `${avatarHTML(S.me, S.wsOk ? (S.presence || 'online') : 'offline')}<div class="who"><b>${esc(S.me.name)}</b><small title="${S.wsOk ? '' : 'The live link to V1 on the Pi dropped (V1 restarting, or Wi-Fi). It reconnects on its own.'}">${S.wsOk ? esc(S.activity || S.me.username) : (S.downSince && Date.now() - S.downSince > 15000 ? 'Can\'t reach the Pi' : 'Reconnecting to V1…')}</small></div>`;
+    $('#meid').innerHTML = `${avatarHTML(S.me, S.wsOk ? (S.presence || 'online') : 'offline')}<div class="who"><b>${esc(S.me.name)}</b><small title="${S.wsOk ? '' : 'The live link to the bot dropped (restarting, or a network blip). It reconnects on its own.'}">${S.wsOk ? esc(S.activity || S.me.tag || S.me.username) : (S.downSince && Date.now() - S.downSince > 15000 ? 'Can\'t reach the Pi' : 'Reconnecting to V1…')}</small></div>`;
   }
   $('#meid').onclick = (e) => showProfile(S.me.id, e.currentTarget);
 
