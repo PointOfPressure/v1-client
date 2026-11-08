@@ -1020,7 +1020,7 @@
     const rx = m.reactions.length ? `<div class="rxs">${m.reactions.map((x) => `<button class="rx${x.me ? ' me' : ''}" data-rx="${esc(x.key)}">${emojiImg(x)}<span>${x.count}</span></button>`).join('')}<button class="rx add" data-act="react" title="Add reaction">${I.smile}</button></div>` : '';
     const tr = m.translated ? `<div class="trans"><b>Translated</b> ${esc(m.translated)}</div>` : '';
     const quick = topReactions().map((k) => `<button class="qr" data-qr="${esc(k.key)}" title="React ${esc(k.name)}">${k.img ? `<img src="${esc(k.img)}" alt="">` : `<span class="ue">${k.uni}</span>`}</button>`).join('');
-    const tools = `<div class="tools">${quick}${quick ? '<i class="tsep"></i>' : ''}${m.content ? `<button data-act="translate" title="Translate">${I.translate}</button>` : ''}<button data-act="react" title="Add reaction">${I.smile}</button>${own && !m.deleted && m.content ? `<button data-act="edit" title="Edit">${I.edit}</button>` : `<button data-act="reply" title="Reply">${I.reply}</button>`}${m.deleted ? '' : `<button data-act="forward" title="Forward">${I.fwdi}</button>`}<button data-act="more" title="More">${I.dots}</button>${m.deleted ? '' : `<button class="del shiftonly" data-act="delete" title="Delete">${I.trash}</button>`}</div>`;
+    const tools = m.deleted ? `<div class="tools"><button data-act="hidedel" title="Remove from history">${I.trash}</button></div>` : `<div class="tools">${quick}${quick ? '<i class="tsep"></i>' : ''}${m.content ? `<button data-act="translate" title="Translate">${I.translate}</button>` : ''}<button data-act="react" title="Add reaction">${I.smile}</button>${own && !m.deleted && m.content ? `<button data-act="edit" title="Edit">${I.edit}</button>` : `<button data-act="reply" title="Reply">${I.reply}</button>`}${m.deleted ? '' : `<button data-act="forward" title="Forward">${I.fwdi}</button>`}<button data-act="more" title="More">${I.dots}</button>${m.deleted ? '' : `<button class="del shiftonly" data-act="delete" title="Delete">${I.trash}</button>`}</div>`;
     const fwd = (m.forwarded || []).map((f) => `<div class="fwdbox"><div class="fwdh">${I.reply} Forwarded</div>${f.content ? `<div class="markup">${md(f.content, m)}</div>` : ''}${f.attachments.length ? `<div class="atts">${f.attachments.map(attHTML).join('')}</div>` : ''}${f.embeds.map((e) => embedHTML(e, m)).join('')}</div>`).join('');
     const comps = compHTML(m.components || []);
     const thr = m.thread ? `<div class="thrchip" data-thread="${m.thread.id}">${I.chat}<b>${esc(m.thread.name)}</b><span>${m.thread.count} message${m.thread.count === 1 ? '' : 's'}</span></div>` : '';
@@ -1348,6 +1348,7 @@
       if (a === 'reply') startReply(m);
       if (a === 'edit') startEdit(m);
       if (a === 'delete') delMessage(m, e.shiftKey);
+      if (a === 'hidedel') { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); el.remove(); return; }
       if (a === 'translate') translate(m);
       if (a === 'forward') forwardPop(m, e);
       if (a === 'more') el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: e.clientX - 180, clientY: e.clientY + 10 }));
@@ -1392,6 +1393,10 @@
     if (!m) return;
     e.preventDefault();
     el.classList.add('ctx');
+    if (m.deleted) { // MessageLogger: a deleted message only offers to be removed from history
+      menu(e, [['Remove from history', () => { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); el.remove(); }, 'red']], () => el.classList.remove('ctx'));
+      return;
+    }
     const sel = String(getSelection() || '');
     const items = [];
     if (sel) items.push(['Copy', () => copy(sel)]);
@@ -1411,6 +1416,7 @@
     if (!m.deleted && ch0?.type === CH.NEWS) items.push(['Publish', () => api('POST', `/channels/${m.channelId}/messages/${m.id}/publish`).then(() => toast('Published'), (x) => toast(x.message, true))]);
     if (!m.deleted && m.guildId && !m.thread) items.push(['Create Thread', async () => { const n = await ask({ title: 'Create Thread', input: { label: 'Thread name', value: (m.content || 'Thread').slice(0, 60) }, ok: 'Create' }); if (n) api('POST', `/channels/${m.channelId}/messages/${m.id}/thread`, { name: n }).then((r) => openChannel(r.id), (x) => toast(x.message, true)); }]);
     items.push(['Mention Author', () => mention(m.author.id, m.author.name)], ['Copy Message Link', () => copy(`https://discord.com/channels/${m.guildId || '@me'}/${m.channelId}/${m.id}`)], ['Copy Message ID', () => copy(m.id)]);
+    if (m.history?.length) items.push(['Remove Message History', () => { m.history = []; rerender(m); }]);
     if (!m.deleted) items.push(['-'], ['Delete Message', () => delMessage(m, true), 'red']);
     menu(e, items, () => el.classList.remove('ctx'));
   });
