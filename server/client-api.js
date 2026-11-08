@@ -328,7 +328,7 @@ function membersOf(g) {
     const top = hoisted.find((r) => m.roles.cache.has(r.id));
     const st = m.presence?.status ?? 'offline';
     return { ...who(m.user, g), status: st, hoist: top?.id ?? null,
-      activity: m.presence?.activities?.find((a) => a.type !== 4)?.name ?? null,
+      activity: m.presence?.activities?.find((a) => a.type !== 4)?.name ?? null, actType: m.presence?.activities?.find((a) => a.type !== 4)?.type ?? 0,
       custom: m.presence?.activities?.find((a) => a.type === 4)?.state ?? null };
   });
   const inVoice = g.voiceStates.cache.filter((v) => v.channelId).size;
@@ -345,7 +345,8 @@ function profileOf(g, uid) {
     activity: act ? { type: act.type, name: act.name, details: act.details ?? null, state: act.state ?? null, since: act.timestamps?.start?.getTime?.() ?? null, image: act.assets?.largeImageURL?.() ?? null } : null,
     names: nameHistory(uid).filter((x) => x.value !== (m?.displayName ?? u.globalName ?? u.username) && x.value !== u.username).slice(-8),
     guildIcon: g?.iconURL({ size: 32 }) ?? null, guildName: g?.name ?? null, canRoles: !!g?.members.me?.permissions.has(PermissionFlagsBits.ManageRoles),
-    banner: u.bannerURL?.({ size: 512 }) ?? null, accent: u.hexAccentColor ?? null,
+    banner: u.bannerURL?.({ size: 1024 }) ?? null, accent: u.hexAccentColor ?? null,
+    mutual: [...client.guilds.cache.values()].filter((x) => x.members.cache.has(uid)).map((x) => ({ id: x.id, name: x.name, icon: x.iconURL({ size: 64, extension: 'webp' }), nick: x.members.cache.get(uid)?.nickname ?? null })),
     roles: m ? [...m.roles.cache.values()].filter((r) => r.id !== g.id).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, name: r.name, color: r.color ? hex(r.color) : null })) : [] };
 }
 function guildInfo(g) {
@@ -431,7 +432,7 @@ function hookEvents(on) {
   on(Events.PresenceUpdate, (_b, p) => {
     if (!sockets.size || !p.guild) return;
     broadcast({ t: 'presence', guildId: p.guild.id, userId: p.userId, status: p.status,
-      activity: p.activities?.find((a) => a.type !== 4)?.name ?? null, custom: p.activities?.find((a) => a.type === 4)?.state ?? null });
+      activity: p.activities?.find((a) => a.type !== 4)?.name ?? null, actType: p.activities?.find((a) => a.type !== 4)?.type ?? 0, custom: p.activities?.find((a) => a.type === 4)?.state ?? null });
   });
   on(Events.GuildMemberAdd, (m) => broadcast({ t: 'membersStale', guildId: m.guild.id }));
   on(Events.GuildMemberRemove, (m) => broadcast({ t: 'membersStale', guildId: m.guild.id }));
@@ -843,10 +844,11 @@ async function route(req, res) {
       if (p[5] === 'reactions' && p[6]) {
         const e = emojiParam(p[6]);
         if (M === 'PUT') await m.react(e);
-        if (M === 'DELETE') await (m.reactions.cache.get(e.includes(':') ? e.split(':')[1] : e) ?? { users: { remove: () => {} } }).users.remove(client.user.id);
+        if (M === 'DELETE') await client.rest.delete(`/channels/${ch.id}/messages/${m.id}/reactions/${encodeURIComponent(e)}/@me`); // straight to Discord: the cache can miss the reaction and silently skip it
         if (M === 'PUT' || M === 'DELETE') { // send the real counts back so nothing can drift or stack
           const fresh = await ch.messages.fetch({ message: m.id, force: true });
           broadcast({ t: 'msgUpdate', m: ser(fresh) });
+          setTimeout(() => ch.messages.fetch({ message: m.id, force: true }).then((f) => broadcast({ t: 'msgUpdate', m: ser(f) }), () => {}), 2500); // again once late gateway events have landed
           return reply(res, 200, { reactions: reactionsOf(fresh) });
         }
       }

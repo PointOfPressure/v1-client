@@ -103,10 +103,16 @@ img { -webkit-user-drag: none; }
 /* avatar with status dot */
 .av { position: relative; flex: none; width: 32px; height: 32px; }
 .av > img { width: 100%; height: 100%; border-radius: 50%; display: block; }
-.av > i { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--side); background: #80848e; }
-#members .mem:hover .av > i { border-color: #101012; }
-.av > i.online { background: var(--good); } .av > i.idle { background: var(--idle); } .av > i.dnd { background: var(--dnd); }
-.av > i.offline { background: #80848e; }
+/* Discord's status dot: the avatar gets a transparent cutout, the dot sits in it with its own shape */
+.av.st > img:first-child { -webkit-mask: radial-gradient(circle at var(--sc) var(--sc), transparent var(--sr), #000 calc(var(--sr) + .5px)); mask: radial-gradient(circle at var(--sc) var(--sc), transparent var(--sr), #000 calc(var(--sr) + .5px)); }
+.av > i, .pav > i { --scol: #80848e; --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.5' cy='.5' r='.25' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av > i { position: absolute; left: var(--sp); top: var(--sp); width: var(--ss); height: var(--ss); background: var(--scol); -webkit-mask: var(--sm) 0 0 / 100% 100% no-repeat; mask: var(--sm) 0 0 / 100% 100% no-repeat;
+  --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.5' cy='.5' r='.25' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av > i.online, .pav > i.online { --scol: var(--good); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Ccircle cx='.5' cy='.5' r='.5'/%3E%3C/svg%3E"); }
+.av > i.idle, .pav > i.idle { --scol: var(--idle); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.25' cy='.25' r='.375' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av > i.dnd, .pav > i.dnd { --scol: var(--dnd); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Crect x='.125' y='.375' width='.75' height='.25' rx='.125' ry='.125' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av > i.streaming, .pav > i.streaming { --scol: #593695; --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Cpolygon points='0.35,0.25 0.78301275,0.5 0.35,0.75' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av.talk::before { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--good); }
 
 #dockpanel { position: absolute; left: 8px; bottom: 8px; width: calc(var(--sw, 268px) + 56px); z-index: 6; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 #vbar { border-bottom: 1px solid var(--line); padding: 8px 8px 8px 12px; }
@@ -120,8 +126,6 @@ img { -webkit-user-drag: none; }
 #mebar { display: flex; align-items: center; gap: 2px; height: 56px; padding: 0 8px; }
 .meid { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 6px; cursor: pointer; }
 .meid:hover { background: var(--hover); }
-.meid .av > i { border-color: var(--card); }
-.meid .av.talk > img { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--good); }
 .meid .who { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
 .meid .who b { font-size: 14px; font-weight: 600; }
 .meid .who small { font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -303,6 +307,7 @@ body.no-mav .mention .mav { display: none; }
 .mem:hover, .mem.on { background: var(--hover); }
 .mem .who { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
 .mem .who b { font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mem .who small b { font-weight: 600; font-size: inherit; }
 .mem .who small { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mem.off { opacity: 1; }
 .mem.off .av > img { opacity: .5; }
@@ -346,8 +351,10 @@ body.no-mav .mention .mav { display: none; }
 .prof .ban { height: 106px; background: var(--accent); background-size: cover; background-position: center; }
 .prof .pav { position: relative; margin: -46px 0 0 16px; width: 92px; height: 92px; }
 .prof .pav img { width: 92px; height: 92px; border-radius: 50%; border: 6px solid var(--menu); display: block; }
-.prof .pav i { position: absolute; right: 2px; bottom: 4px; width: 24px; height: 24px; border-radius: 50%; border: 5px solid var(--menu); background: #80848e; }
-.prof .pav i.online { background: var(--good); } .prof .pav i.idle { background: var(--idle); } .prof .pav i.dnd { background: var(--dnd); }
+.prof .pav { cursor: pointer; } .prof .pname[data-pa] { cursor: pointer; } .prof .pname[data-pa]:hover { text-decoration: underline; }
+/* Discord 80px geometry: dot 16, cutout ring 6, inset 4 (the ring is the card colour, like the avatar border) */
+.prof .pav > i { position: absolute; left: 60px; top: 60px; width: 28px; height: 28px; border-radius: 50%; background: var(--menu); z-index: 1; }
+.prof .pav > i::after { content: ''; position: absolute; inset: 6px; background: var(--scol); -webkit-mask: var(--sm) 0 0 / 100% 100% no-repeat; mask: var(--sm) 0 0 / 100% 100% no-repeat; }
 .prof .pbody { padding: 8px 16px 16px; display: grid; gap: 10px; }
 .prof .pname { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .prof .puser { font-size: 14px; font-weight: 500; }
@@ -675,7 +682,6 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 .cat svg { width: 12px; height: 12px; }
 .ch { color: #fff; }
 .ch:hover, .ch.on, .ch.unread, .ch.vc.live { color: #fff; }
-.ch .lockb { margin: 0 0 -6px -10px; flex: none; }
 .ch.vc.live > svg.hash { color: var(--good); }
 .vtimer { font: 600 12px var(--mono); color: var(--good); margin-left: auto; }
 .vm { color: #fff; }
@@ -780,7 +786,6 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 .acard { overflow: hidden; }
 .actl { min-width: 0; }
 .aseek { width: 100%; }
-.ch .lockb { position: relative; left: -10px; top: 6px; margin-right: -12px; background: var(--side); border-radius: 50%; padding: 1px; }
 #nowplay { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 500; }
 #nowplay .npn { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #nowplay .ico { width: 24px; height: 24px; }
@@ -1142,3 +1147,27 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .pnames { display: flex; flex-wrap: wrap; gap: 4px; }
 .pnames span { font-size: 13px; font-weight: 500; background: var(--raise); border-radius: 4px; padding: 2px 8px; }
 .cb.sharing { background: var(--good); border-color: var(--good); color: #fff; }
+
+/* full profile (Discord's "View Full Profile") */
+.fprof { width: 600px; max-width: calc(100vw - 32px); max-height: calc(100vh - 64px); overflow-y: auto; background: var(--menu); border: 1px solid var(--line); border-radius: 12px; }
+.fprof .ban { height: 212px; }
+.fprof .phead { position: relative; min-height: 76px; }
+.fprof .pav { margin: -76px 0 0 16px; width: 132px; height: 132px; cursor: default; }
+.fprof .pav img { width: 132px; height: 132px; }
+.fprof .pav > i { left: 86px; top: 86px; width: 40px; height: 40px; }
+.fprof .pav > i::after { inset: 8px; }
+.fprof .pbubble { left: 160px; top: 10px; right: 140px; }
+.fprof .fmsg { position: absolute; right: 16px; top: 16px; display: flex; align-items: center; gap: 6px; height: 32px; }
+.fprof .fmsg svg { width: 16px; height: 16px; }
+.fprof .pbody { padding: 12px 20px 20px; }
+.fprof .pname { font-size: 24px; }
+.ftabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin-top: 6px; }
+.ftabs button { height: 36px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; }
+.ftabs button.on { border-bottom-color: #fff; font-weight: 600; }
+.fpane { display: grid; gap: 12px; padding-top: 4px; }
+.fnote { font-size: 14px; }
+.fmut { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; text-align: left; }
+.fmut:hover { background: var(--hover); }
+.fmut img, .fmut .fmi { width: 40px; height: 40px; border-radius: 12px; flex: none; }
+.fmut .fmi { display: grid; place-items: center; background: var(--raise); font-size: 13px; font-weight: 600; }
+.fmut span { display: flex; flex-direction: column; } .fmut b { font-weight: 600; font-size: 15px; } .fmut small { font-size: 13px; }

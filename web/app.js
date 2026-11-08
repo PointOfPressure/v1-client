@@ -17,7 +17,7 @@
   addEventListener('unhandledrejection', (e) => report('promise: ' + (e.reason?.message || e.reason)));
   // the page is http (from the bot's machine), where WebKit blocks navigator.clipboard: copy through a hidden textarea instead
   const copy = (t) => {
-    const ok = () => toast('Copied'), fallback = () => {
+    const ok = () => {}, fallback = () => {
       const tx = document.createElement('textarea'); tx.value = t; tx.setAttribute('readonly', ''); tx.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
       document.body.append(tx); tx.select(); tx.setSelectionRange(0, t.length);
       let done = false; try { done = document.execCommand('copy'); } catch { /* */ }
@@ -55,6 +55,11 @@
     rules: P('M4 4a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V4Zm12.7 4.7a1 1 0 0 0-1.4-1.4L11 11.58l-1.3-1.3a1 1 0 0 0-1.4 1.42l2 2a1 1 0 0 0 1.4 0l5-5ZM8 16a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2H8Z', ' class="hash"'),
     forum: P('M18.91 12.98a5.45 5.45 0 0 1 2.18 6.2c-.1.33-.09.68.1.96l.83 1.32a.5.5 0 0 1-.42.76h-4.6a5.6 5.6 0 0 1-3.03-.87A5.46 5.46 0 0 1 18.9 13ZM16.4 9.57a7.2 7.2 0 0 0-5.85 9.68.5.5 0 0 1-.46.67H6.48a.5.5 0 0 1-.36-.15l-1.3-1.33A8 8 0 1 1 16.4 9.57Z', ' class="hash"'),
     stage: P('M19.61 18.25a1.08 1.08 0 0 1-.07-1.33 9 9 0 1 0-15.07 0c.26.42.25.97-.08 1.33l-.02.02c-.41.44-1.12.43-1.46-.07a11 11 0 1 1 18.17 0c-.33.5-1.04.51-1.45.07l-.02-.02ZM16.83 15.23c.43.47 1.18.42 1.45-.14a7 7 0 1 0-12.57 0c.28.56 1.03.6 1.46.14l.03-.03c.3-.33.35-.81.17-1.23A4.98 4.98 0 0 1 12 7a5 5 0 0 1 4.6 6.97c-.17.42-.13.9.18 1.23l.05.03ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM6.33 20.03c-.25.72.12 1.5.8 1.84a10.96 10.96 0 0 0 9.73 0 1.5 1.5 0 0 0 .8-1.84 6 6 0 0 0-11.33 0Z', ' class="hash"'),
+    hashLock: '<svg viewBox="0 0 24 24" class="hash"><path fill="currentColor" fill-rule="evenodd" d="M16 4h.5v-.5a2.5 2.5 0 0 1 5 0V4h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm4-.5V4h-2v-.5a1 1 0 1 1 2 0Z"/><path fill="currentColor" d="M12.5 8c.28 0 .5.22.5.5V9c0 .1 0 .2.02.31.03.34-.21.69-.56.69H9.85l-.67 4h4.97l.28-1.68c.06-.34.44-.52.77-.43a3 3 0 0 0 .8.11c.27 0 .47.24.43.5l-.25 1.5H20a1 1 0 1 1 0 2h-4.15l-.86 5.16a1 1 0 0 1-1.98-.32l.8-4.84H8.86l-.86 5.16A1 1 0 0 1 6 20.84L6.82 16H3a1 1 0 1 1 0-2h4.15l.67-4H4a1 1 0 1 1 0-2h4.15l.86-5.16a1 1 0 1 1 1.98.32L10.19 8h2.31Z"/></svg>',
+    speakerLock: '<svg viewBox="0 0 24 24" class="hash"><path fill="currentColor" fill-rule="evenodd" d="M16 4h.5v-.5a2.5 2.5 0 0 1 5 0V4h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm4-.5V4h-2v-.5a1 1 0 1 1 2 0Z"/><path fill="currentColor" d="M11 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1h-.06a1 1 0 0 1-.74-.32L5.92 17H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h2.92l4.28-4.68a1 1 0 0 1 .74-.32H11ZM20.5 12c-.28 0-.5.22-.52.5a7 7 0 0 1-5.13 6.25c-.48.13-.85.55-.85 1.05v.03c0 .6.52 1.06 1.1.92a9 9 0 0 0 6.89-8.25.48.48 0 0 0-.49-.5h-1ZM16.5 12c-.28 0-.5.23-.54.5a3 3 0 0 1-1.33 2.02c-.35.23-.63.6-.63 1.02v.14c0 .63.59 1.1 1.16.83a5 5 0 0 0 2.82-4.01c.02-.28-.2-.5-.48-.5h-1Z"/></svg>',
+    stageLock: '<svg viewBox="0 0 24 24" class="hash"><path fill="currentColor" d="M21.92 14.08c.32.27.86.15.93-.26A11 11 0 1 0 2.91 18.2c.34.5 1.05.51 1.46.07l.02-.02c.33-.36.34-.91.07-1.33a9 9 0 1 1 16.48-3.88c-.03.22.1.44.29.55.24.14.48.3.7.49Z"/><path fill="currentColor" d="M13.48 16.18c.39.1.45.62.2.93A2.99 2.99 0 0 0 13 19v3.5c0 .26-.2.47-.46.49a11.16 11.16 0 0 1-5.4-1.12 1.52 1.52 0 0 1-.8-1.84 6 6 0 0 1 7.14-3.85ZM18.98 12.58c-.02.24-.23.42-.48.45-.18.02-.35.05-.53.09-.45.1-1-.36-.98-.82L17 12a5 5 0 1 0-9.6 1.94c.17.42.13.9-.18 1.23l-.05.06c-.43.47-1.18.42-1.45-.14a7 7 0 1 1 13.26-2.51Z"/><path fill="currentColor" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path fill="currentColor" fill-rule="evenodd" d="M16.5 18H16a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-.5v-.5a2.5 2.5 0 0 0-5 0v.5Zm3.5 0v-.5a1 1 0 1 0-2 0v.5h2Z"/></svg>',
+    announceLock: '<svg viewBox="0 0 24 24" class="hash"><path fill="currentColor" fill-rule="evenodd" d="M16 4h.5v-.5a2.5 2.5 0 0 1 5 0V4h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm4-.5V4h-2v-.5a1 1 0 1 1 2 0Z"/><path fill="currentColor" fill-rule="evenodd" d="M12.33 5.74a.5.5 0 0 1 .67.47V9a3 3 0 0 0 3 3h5.5c.28 0 .5.22.5.5v8c0 .83-.67 1.5-1.5 1.5h-.94a3 3 0 0 1-2.46-1.28 3.86 3.86 0 0 0-1.07-1.03l-2.36-.94a.92.92 0 0 0-1.23.63 2.92 2.92 0 0 1-3.55 2.12l-.62-.15A3 3 0 0 1 6 18.44V8.35c0-.2.13-.4.33-.47l6-2.14Zm-1.3 12.06L8 16.7v1.73a1 1 0 0 0 .76.97l.62.15c.5.13 1-.17 1.12-.67.1-.41.29-.78.53-1.1Z"/><path fill="currentColor" d="M2 10c0-1.1.9-2 2-2h.5c.28 0 .5.22.5.5v7a.5.5 0 0 1-.5.5H4a2 2 0 0 1-2-2v-4Z"/></svg>',
+    forumLock: '<svg viewBox="0 0 24 24" class="hash"><path fill="currentColor" fill-rule="evenodd" d="M16 4h.5v-.5a2.5 2.5 0 0 1 5 0V4h.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm4-.5V4h-2v-.5a1 1 0 1 1 2 0Z"/><path fill="currentColor" d="M13.58 3.23c.24-.33.16-.86-.24-.96C12.59 2.1 11.8 2 11 2c-4.97 0-9 3.58-9 8 0 1.5.47 2.91 1.28 4.11.14.21.12.49-.06.67l-1.51 1.51A1 1 0 0 0 2.4 18h5.1a.5.5 0 0 0 .49-.5c0-3.17 2-5.82 4.77-6.94.29-.11.43-.45.34-.75A3 3 0 0 1 13 9V5c0-.66.22-1.28.58-1.77ZM18.91 12.98a5.45 5.45 0 0 1 2.18 6.2c-.1.33-.09.68.1.96l.83 1.32a1 1 0 0 1-.84 1.54h-5.5A5.6 5.6 0 0 1 10 17.5a5.6 5.6 0 0 1 5.68-5.5c1.2 0 2.32.36 3.23.98Z"/></svg>',
     lock: '<svg class="lockb" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" fill-rule="evenodd" d="M6 9h1V6a5 5 0 0 1 10 0v3h1a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3Zm9-3v3H9V6a3 3 0 1 1 6 0Z"/></svg>',
     invite: P('M19 14a1 1 0 0 1 1 1v3h3a1 1 0 0 1 0 2h-3v3a1 1 0 0 1-2 0v-3h-3a1 1 0 1 1 0-2h3v-3a1 1 0 0 1 1-1ZM12.5 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9ZM10 13h4.36c.26 0 .41.29.26.5a5.48 5.48 0 0 0-.64 5.03c.08.22-.08.47-.32.47H3.5a.5.5 0 0 1-.5-.5v-.5a4.5 4.5 0 0 1 4.5-4.5H10Z'),
     search: P('M15.62 17.03a9 9 0 1 1 1.41-1.41l4.68 4.67a1 1 0 0 1-1.42 1.42l-4.67-4.68ZM17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z'),
@@ -271,7 +276,7 @@
       case 'guildGone': S.guilds.delete(d.id); renderRail(); break;
       case 'presence': {
         const ms = S.members.get(d.guildId); const m = ms?.byId.get(d.userId);
-        if (m) { const moved = (m.status === 'offline') !== (d.status === 'offline'); Object.assign(m, { status: d.status, activity: d.activity, custom: d.custom, platforms: d.platforms || m.platforms }); if (d.guildId === S.gid) moved ? renderMembersSoon() : patchMember(m); }
+        if (m) { const moved = (m.status === 'offline') !== (d.status === 'offline'); Object.assign(m, { status: d.status, activity: d.activity, actType: d.actType, custom: d.custom, platforms: d.platforms || m.platforms }); if (d.guildId === S.gid) moved ? renderMembersSoon() : patchMember(m); }
         break;
       }
       case 'membersStale': VIEWERS.clear(); S.members.delete(d.guildId); if (d.guildId === S.gid) loadMembers(d.guildId); break;
@@ -348,7 +353,15 @@
   const NICK = store.get('nicks', {});
   const nickOf = (u) => (u && NICK[u.id]) || null;
   const anim = (still, moving, size) => moving ? ` data-still="${esc(px(still, size))}" data-anim="${esc(px(moving, size))}"` : '';
-  const avatarHTML = (u, status, size = 32) => `<span class="av" style="width:${size}px;height:${size}px"><img src="${esc(px(u.avatar, size))}"${anim(u.avatar, u.avatarAnim, size)} alt="" loading="lazy" decoding="async">${u.deco ? `<img class="deco" src="${esc(px(u.deco, size * 1.2))}"${anim(u.deco, u.decoAnim, size * 1.2)} alt="" loading="lazy" decoding="async">` : ''}${status ? `<i class="${status}"></i>` : ''}</span>`;
+  // Discord's avatar status geometry (status dot size, cutout stroke, inset) per avatar size
+  const AVST = [[16, 6, 2, 0], [20, 6, 2, 0], [24, 8, 3, 0], [32, 10, 3, 0], [40, 12, 4, 0], [48, 12, 4, 0], [56, 14, 4, 2], [72, 16, 6, 4], [80, 16, 6, 4], [96, 20, 8, 6], [120, 24, 8, 8]];
+  const avStyle = (size, status) => {
+    if (!status) return `width:${size}px;height:${size}px`;
+    const [, st, sk, off] = AVST.find((r) => r[0] >= size) || AVST[AVST.length - 1];
+    const c = size - st / 2 - off;
+    return `width:${size}px;height:${size}px;--sp:${size - st - off}px;--ss:${st}px;--sc:${c}px;--sr:${st / 2 + sk}px`;
+  };
+  const avatarHTML = (u, status, size = 32) => `<span class="av${status ? ' st' : ''}" style="${avStyle(size, status)}"><img src="${esc(px(u.avatar, size))}"${anim(u.avatar, u.avatarAnim, size)} alt="" loading="lazy" decoding="async">${u.deco ? `<img class="deco" src="${esc(px(u.deco, size * 1.2))}"${anim(u.deco, u.decoAnim, size * 1.2)} alt="" loading="lazy" decoding="async">` : ''}${status ? `<i class="${status}"></i>` : ''}</span>`;
   const statusText = (s) => ({ online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' }[s] || 'Offline');
 
   // ------------------------------------------------------------------ rail
@@ -446,12 +459,12 @@
         const here = S.voice?.channelId === c.id;
         const ms = g.voice[c.id] || [];
         const since = (g.since || {})[c.id] ?? c.since;
-        html += `<div class="ch vc${here ? ' here' : ''}${ms.length ? ' live' : ''}${c.id === S.cid ? ' on' : ''}${u?.n ? ' unread' : ''}" role="button" data-vc="${c.id}" title="Double-click to join">${c.type === CH.STAGE ? I.stage : I.speaker}${c.private ? I.lock : ''}<span class="nm">${esc(c.name)}</span>`
+        html += `<div class="ch vc${here ? ' here' : ''}${ms.length ? ' live' : ''}${c.id === S.cid ? ' on' : ''}${u?.n ? ' unread' : ''}" role="button" data-vc="${c.id}" title="Double-click to join">${c.type === CH.STAGE ? (c.private ? I.stageLock : I.stage) : (c.private ? I.speakerLock : I.speaker)}<span class="nm">${esc(c.name)}</span>`
           + `${u?.mentions ? `<span class="badge">${u.mentions}</span>` : ''}${ms.length && since ? `<span class="vtimer" data-since="${since}"></span>` : ''}<span class="chat" data-open="${c.id}" title="Open chat">${I.chat}</span></div>`;
         if (ms.length) html += `<div class="vmembers">${ms.map((m) => `<div class="vm" data-uid="${m.id}"><img src="${esc(px(m.avatar, 24))}" alt=""><span class="nm">${esc(nickOf(m) || m.name)}</span>${clanHTML(m)}<span class="vsp"></span>${m.stream ? '<span class="live">LIVE</span>' : ''}${m.deaf ? I.headOff : m.mute ? I.micOff : ''}</div>`).join('')}</div>`;
       } else {
-        const icon = c.rules ? I.rules : c.type === CH.NEWS ? I.announce : c.type === 15 || c.type === 16 ? I.forum : I.hash;
-        html += `<button class="ch${c.id === S.cid ? ' on' : ''}${u?.n ? ' unread' : ''}" data-c="${c.id}">${icon}${c.private ? I.lock : ''}<span class="nm">${esc(c.name)}</span>${u?.mentions ? `<span class="badge">${u.mentions}</span>` : ''}</button>`;
+        const icon = c.rules ? I.rules : c.type === CH.NEWS ? (c.private ? I.announceLock : I.announce) : c.type === 15 || c.type === 16 ? (c.private ? I.forumLock : I.forum) : c.private ? I.hashLock : I.hash;
+        html += `<button class="ch${c.id === S.cid ? ' on' : ''}${u?.n ? ' unread' : ''}" data-c="${c.id}">${icon}<span class="nm">${esc(c.name)}</span>${u?.mentions ? `<span class="badge">${u.mentions}</span>` : ''}</button>`;
         for (const t of g.channels.filter((x) => x.thread && x.parent === c.id)) {
           const tu = S.unread.get(t.id);
           html += `<button class="ch thr${t.id === S.cid ? ' on' : ''}${tu?.n ? ' unread' : ''}" data-c="${t.id}"><span class="nm">${esc(t.name)}</span></button>`;
@@ -813,10 +826,11 @@
   }
   $('#members').addEventListener('input', (e) => { if (e.target.id === 'msq') filterMembers(e.target.value); });
   const platHTML = (u) => (u.platforms || []).filter((p) => p !== 'desktop' || (u.platforms || []).length > 1).map((p) => I[p] || '').join('');
+  const ACTVERB = ['Playing', 'Streaming', 'Listening to', 'Watching', '', 'Competing in'];
   function memberHTML(m, g) {
-    const sub = m.custom || (m.activity ? 'Playing ' + m.activity : '');
+    const sub = m.custom ? esc(m.custom) : m.activity ? `${ACTVERB[m.actType ?? 0] ?? 'Playing'} <b>${esc(m.activity)}</b>` : '';
     const np = m.nameplate ? ` style="--np:url('${esc(m.nameplate.img)}')"` : '';
-    return `<button class="mem${m.status === 'offline' ? ' off' : ''}${m.nameplate ? ' np' : ''}" data-uid="${m.id}"${np}>${avatarHTML(m, m.status)}<span class="who"><span class="nrow"><b class="${m.grad ? 'grad' : ''}" style="${nameStyle(m)}">${esc(nickOf(m) || m.name)}</b>${clanHTML(m)}${on('ForceOwnerCrown') && m.id === g.owner ? I.crown : ''}${m.bot ? '<span class="tag">APP</span>' : ''}${platHTML(m)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
+    return `<button class="mem${m.status === 'offline' ? ' off' : ''}${m.nameplate ? ' np' : ''}" data-uid="${m.id}"${np}>${avatarHTML(m, m.status)}<span class="who"><span class="nrow"><b class="${m.grad ? 'grad' : ''}" style="${nameStyle(m)}">${esc(nickOf(m) || m.name)}</b>${clanHTML(m)}${on('ForceOwnerCrown') && m.id === g.owner ? I.crown : ''}${m.bot ? '<span class="tag">APP</span>' : ''}${platHTML(m)}</span>${sub ? `<small>${sub}</small>` : ''}</span></button>`;
   }
   function patchMember(m) {
     const el = $(`#members .mem[data-uid="${m.id}"]`); if (!el) return;
@@ -840,13 +854,13 @@
       CertifiedModerator: ['Moderator Programs Alumni', '🛡️'], ActiveDeveloper: ['Active Developer', '⌨️'], VerifiedBot: ['Verified App', '✔️'] };
     const badges = (p.flags || []).filter((f) => BADGE[f]).map((f) => `<span class="pbadge ue" title="${BADGE[f][0]}">${BADGE[f][1]}</span>`).join('');
     const note = store.get('notes', {})[uid] || '';
-    const actTxt = p.activity ? `${['Playing', 'Streaming', 'Listening to', 'Watching', '', 'Competing in'][p.activity.type] || ''} <b>${esc(p.activity.name)}</b>` : '';
+    const actTxt = p.activity ? `${ACTVERB[p.activity.type] || ''} <b>${esc(p.activity.name)}</b>` : '';
     const html = `<div class="prof">
       <div class="ban" style="${ban}"><button class="pmore" data-pa="more" title="More">${I.dots}</button></div>
-      <div class="phead"><div class="pav"><img src="${esc(px(p.avatar, 80))}"${anim(p.avatar, p.avatarAnim, 80)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 96))}"${anim(p.deco, p.decoAnim, 96)} alt="">` : ''}<i class="${p.status}"></i></div>
+      <div class="phead"><div class="pav" data-pa="full" title="View Full Profile"><img src="${esc(px(p.avatar, 80))}"${anim(p.avatar, p.avatarAnim, 80)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 96))}"${anim(p.deco, p.decoAnim, 96)} alt="">` : ''}<i class="${p.status}"></i></div>
         ${p.custom ? `<div class="pbubble">${esc(p.custom)}</div>` : ''}</div>
       <div class="pbody">
-        <div class="pname">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
+        <div class="pname" data-pa="full">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
         <div class="puser">${esc(p.tag || p.username)}${p.clan ? ' • ' + clanHTML(p) : ''}${badges ? `<span class="pbadges">${badges}</span>` : ''}</div>
         ${p.activity ? `<div class="pact2">${p.activity.image ? `<img src="${esc(p.activity.image)}" alt="">` : ''}<div><div>${actTxt}</div>${p.activity.details ? `<div class="sm">${esc(p.activity.details)}</div>` : ''}${p.activity.state ? `<div class="sm">${esc(p.activity.state)}</div>` : ''}</div></div>` : ''}
         ${p.names?.length ? `<div class="psec"><h5>Previously known as</h5><div class="pnames">${p.names.slice().reverse().map((x) => `<span title="${esc(x.kind)} · first seen ${new Date(x.at).toLocaleDateString('en-GB')}">${esc(x.value)}</span>`).join('')}</div></div>` : ''}
@@ -856,6 +870,39 @@
         <div class="psec"><h5>Note <span class="pnh">(only visible to you)</span></h5><textarea class="pnote" placeholder="Click to add a note" rows="1">${esc(note)}</textarea></div>
         ${p.bot || p.id === S.me.id ? '' : `<input class="pmsg" placeholder="Message @${esc(nickOf(p) || p.name)}">`}
       </div></div>`;
+    const fmtD = (t) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    function fullProfile() { // Discord's "View Full Profile"
+      const box = document.createElement('div'); box.className = 'modal';
+      const tabs = [['about', 'About'], ...(p.activity ? [['act', 'Activity']] : []), ...(p.mutual?.length ? [['mutual', `Mutual Servers (${p.mutual.length})`]] : [])];
+      const pane = {
+        about: () => `${p.names?.length ? `<div class="psec"><h5>Previously known as</h5><div class="pnames">${p.names.slice().reverse().map((x) => `<span>${esc(x.value)}</span>`).join('')}</div></div>` : ''}
+          <div class="psec"><h5>Member Since</h5><div class="psince"><span>${I.dm}${fmtD(p.created)}</span>${p.joined ? `<i class="psd"></i><span>${p.guildIcon ? `<img src="${esc(p.guildIcon)}" alt="">` : ''}${fmtD(p.joined)}</span>` : ''}</div></div>
+          ${p.roles?.length ? `<div class="psec"><h5>Roles</h5><div class="roles">${p.roles.map((x) => `<span class="role"><i style="${x.color ? `background:${x.color}` : ''}"></i>${esc(x.name)}</span>`).join('')}</div></div>` : ''}
+          ${inVc ? `<div class="psec"><h5>In Voice</h5><div class="pvc">${I.speakerS}${esc(chan(inVc[0])?.name ?? '')}</div></div>` : ''}
+          <div class="psec"><h5>Note <span class="pnh">(only visible to you)</span></h5><div class="fnote">${esc(store.get('notes', {})[uid] || '') || 'No note'}</div></div>`,
+        act: () => `<div class="pact2">${p.activity.image ? `<img src="${esc(p.activity.image)}" alt="">` : ''}<div><div>${actTxt}</div>${p.activity.details ? `<div class="sm">${esc(p.activity.details)}</div>` : ''}${p.activity.state ? `<div class="sm">${esc(p.activity.state)}</div>` : ''}</div></div>`,
+        mutual: () => p.mutual.map((x) => `<button class="fmut" data-g="${x.id}">${x.icon ? `<img src="${esc(x.icon)}" alt="">` : `<span class="fmi">${esc(x.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 3))}</span>`}<span><b>${esc(x.name)}</b>${x.nick ? `<small>${esc(x.nick)}</small>` : ''}</span></button>`).join(''),
+      };
+      box.innerHTML = `<div class="fprof prof"><div class="ban" style="${ban}"></div>
+        <div class="phead"><div class="pav"><img src="${esc(px(p.avatar, 128))}"${anim(p.avatar, p.avatarAnim, 128)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 160))}"${anim(p.deco, p.decoAnim, 160)} alt="">` : ''}<i class="${p.status}"></i></div>
+          ${p.custom ? `<div class="pbubble">${esc(p.custom)}</div>` : ''}
+          ${p.bot || p.id === S.me.id ? '' : `<button class="btn fmsg" data-f="dm">${I.dm}Message</button>`}</div>
+        <div class="pbody"><div class="pname">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
+          <div class="puser">${esc(p.tag || p.username)}${p.clan ? ' • ' + clanHTML(p) : ''}${badges ? `<span class="pbadges">${badges}</span>` : ''}</div>
+          <div class="ftabs">${tabs.map(([k, l], i) => `<button data-t="${k}"${i ? '' : ' class="on"'}>${l}</button>`).join('')}</div>
+          <div class="fpane">${pane.about()}</div></div></div>`;
+      document.body.append(box); twe(box);
+      const close = () => { box.remove(); document.removeEventListener('keydown', esc1, true); };
+      const esc1 = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+      document.addEventListener('keydown', esc1, true);
+      box.onclick = (e) => {
+        if (e.target === box) return close();
+        const t = e.target.closest('[data-t]');
+        if (t) { for (const b of box.querySelectorAll('[data-t]')) b.classList.toggle('on', b === t); box.querySelector('.fpane').innerHTML = pane[t.dataset.t](); twe(box); return; }
+        if (e.target.closest('[data-f="dm"]')) { close(); openDm(uid); return; }
+        const gb = e.target.closest('[data-g]'); if (gb) { close(); openGuild?.(gb.dataset.g); }
+      };
+    }
     const pop = showPop(0, 0, html);
     const [x, y] = place(pop); pop.style.left = Math.max(8, Math.min(x, innerWidth - pop.offsetWidth - 8)) + 'px'; pop.style.top = Math.max(8, Math.min(y, innerHeight - pop.offsetHeight - 8)) + 'px';
     twe(pop);
@@ -875,6 +922,7 @@
       if (a === 'more') { userMenu({ clientX: r2.right + 6, clientY: r2.top, target: anchor }, uid, inVc && inVc[0] === S.voice?.channelId); return; }
       if (a === 'roles') { rolesPop(uid, { clientX: r2.left, clientY: r2.bottom + 4 }); return; }
       hidePop();
+      if (a === 'full') fullProfile();
       if (a === 'dm') openDm(uid);
       if (a === 'mention') mention(uid, p.name);
       if (a === 'id') copy(uid);
