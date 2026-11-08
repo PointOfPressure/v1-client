@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-yt-stream"
+description = "Enables the yt_stream command without any pre-configured scope."
+commands.allow = ["yt_stream"]
+
+[[permission]]
+identifier = "deny-yt-stream"
+description = "Denies the yt_stream command without any pre-configured scope."
+commands.deny = ["yt_stream"]

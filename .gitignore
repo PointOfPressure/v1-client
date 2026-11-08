@@ -1,0 +1,5 @@
+app/target/
+key.js
+*.log
+web/fonts/
+web/vendor/dicons.js

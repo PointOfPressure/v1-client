@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-claude-ask"
+description = "Enables the claude_ask command without any pre-configured scope."
+commands.allow = ["claude_ask"]
+
+[[permission]]
+identifier = "deny-claude-ask"
+description = "Denies the claude_ask command without any pre-configured scope."
+commands.deny = ["claude_ask"]

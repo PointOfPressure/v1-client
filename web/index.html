@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V1 Client</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="titlebar" data-tauri-drag-region><div class="tnav"><button id="tback" title="Back"></button><button id="tfwd" title="Forward"></button><button id="treload" title="Refresh (Ctrl+R)"></button></div><div class="ttitle" id="ttitle" data-tauri-drag-region></div><div class="tctl" id="tctl"></div></header>
+<div id="app">
+  <nav id="rail" aria-label="Servers"></nav>
+  <aside id="side">
+    <header id="sidehead"></header>
+    <div id="chans"></div>
+  </aside>
+  <main id="main">
+    <header id="chead"></header>
+    <div id="body">
+    <div id="callgrid" hidden></div>
+    <div id="chatcol">
+    <div id="scroller"><div id="log"></div></div>
+    <div id="dock">
+      <div id="ac" hidden></div>
+      <div id="typing"></div>
+      <div id="replybar" hidden></div>
+      <div id="filebar" hidden></div>
+      <form id="composer" autocomplete="off">
+        <button type="button" id="attach" class="ico" title="Upload a file"></button>
+        <input type="file" id="file" multiple hidden>
+        <textarea id="ta" rows="1" spellcheck="true"></textarea>
+        <button type="button" id="emo" class="ico" title="Emoji"></button>
+      </form>
+    </div>
+    </div>
+    </div>
+  </main>
+  <aside id="members"></aside>
+
+  <div id="dockpanel">
+    <div id="nowplay" hidden></div><div id="bgaudio" hidden></div>
+    <section id="vbar" hidden>
+      <div class="vrow">
+        <div class="vwhere"><b id="vstatus">Connecting</b><span id="vname"></span></div>
+        <span id="vping"></span>
+        <button id="vleave" class="ico danger" title="Disconnect"></button>
+      </div>
+    </section>
+    <footer id="mebar">
+      <div class="meid" id="meid"></div>
+      <button id="bmute" class="ico" title="Mute"></button>
+      <button id="bdeaf" class="ico" title="Deafen"></button>
+      <button id="bset" class="ico" title="Voice settings"></button>
+    </footer>
+  </div>
+</div>
+  <aside id="claude" class="cwin" hidden><header class="chd"><b>Claude</b><span class="cstat" id="cstat"></span><button class="ico" id="cnew" title="New chat"></button><button class="ico" id="cclose" title="Close"></button></header><div class="clog" id="clog"></div><form class="cin"><textarea id="cta" rows="1" placeholder="Ask Claude, or tell it what to do as V1"></textarea><button type="button" class="ico" id="csend" title="Send"></button></form></aside>
+<div id="pop" hidden></div>
+<div id="toast" hidden></div>
+<div id="drop" hidden>Drop to upload</div>
+
+<script src="key.js"></script>
+<script src="vendor/simple-markdown.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<script src="vendor/markdown.js"></script>
+<script src="vendor/dicons.js" onerror="window.DICONS={}"></script>
+<script src="audio.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

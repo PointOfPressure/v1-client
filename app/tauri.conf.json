@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "V1 Client",
+  "version": "0.1.0",
+  "identifier": "dev.v1client.app",
+  "build": { "frontendDist": "dist" },
+  "app": { "withGlobalTauri": true, "windows": [], "security": { "csp": null } },
+  "bundle": { "active": false, "icon": ["icons/icon.png"] }
+}
