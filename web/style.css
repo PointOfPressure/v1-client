@@ -1110,3 +1110,9 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .lbnav:hover { background: #000d; }
 .lbnav.prev { left: 24px; } .lbnav.next { right: 24px; }
 .lbcount { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); font-weight: 700; font-size: 14px; background: #000a; padding: 4px 12px; border-radius: 12px; }
+/* typing line: dots centred on the text, lined up with the message box's text */
+#dock #typing { display: flex; align-items: center; gap: 6px; height: 24px; line-height: 24px; padding-left: 14px; font-size: 13px; }
+#typing .dots { display: inline-flex; align-items: center; gap: 3px; height: 24px; flex: none; }
+#typing .dots i { width: 5px; height: 5px; border-radius: 50%; display: block; margin: 0; transform: none !important; }
+#typing span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 24px; }
+#typing b { font-weight: 700; }
