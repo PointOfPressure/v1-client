@@ -310,7 +310,8 @@ function chanInfo(ch) {
     topic: ch.topic ?? null, send: canSend(ch), nsfw: !!ch.nsfw,
     manage: !!(ch.guild && ch.permissionsFor(ch.guild.members.me)?.has(PermissionFlagsBits.ManageMessages)),
     rules: !!ch.guild && ch.id === ch.guild.rulesChannelId,
-    locked: !!ch.guild && !ch.isThread?.() && ch.permissionOverwrites?.cache.get(ch.guild.id)?.deny.has(PermissionFlagsBits.SendMessages),
+    locked: !!ch.guild && (ch.isThread?.() ? !!ch.locked : !!ch.permissionOverwrites?.cache.get(ch.guild.id)?.deny.has(PermissionFlagsBits.SendMessages)),
+    threadManage: !!ch.isThread?.() && !!ch.permissionsFor(ch.guild.members.me)?.has(PermissionFlagsBits.ManageThreads),
     private: !!ch.guild && !ch.isThread() && !ch.permissionsFor(ch.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel),
     since: vcSince.get(ch.id) ?? null };
 }
@@ -871,6 +872,15 @@ async function route(req, res) {
       const b = await body(req);
       await ch.permissionOverwrites.edit(ch.guild.roles.everyone, { SendMessages: b.on ? false : null }, { reason: 'V1 Client', type: OverwriteType.Role });
       return reply(res, 200, { locked: !!b.on });
+    }
+    if (M === 'POST' && p[3] === 'threadact' && ch.isThread?.()) { // Discord's thread menu: leave / close / lock
+      const b = await body(req);
+      if (b.action === 'leave') await ch.leave();
+      else if (b.action === 'close') await ch.setArchived(true, 'V1 Client');
+      else if (b.action === 'lock') await ch.setLocked(!!b.on, 'V1 Client');
+      else return reply(res, 400, { error: 'unknown action' });
+      broadcast({ t: 'guild', g: guildInfo(ch.guild) });
+      return reply(res, 200, { ok: true, locked: !!ch.locked });
     }
     if (M === 'POST' && p[3] === 'clone') { const c2 = await ch.clone({ reason: 'V1 Client' }); return reply(res, 200, { id: c2.id }); }
     if (M === 'GET' && p[3] === 'viewers') { // who can see this channel (Discord's member list is per channel)

@@ -533,6 +533,14 @@
     const c = e.target.closest('[data-c]');
     if (c) {
       e.preventDefault(); const ch = chan(c.dataset.c);
+      if (ch?.thread) { // Discord's thread menu
+        const id = c.dataset.c, TA = (body, msg) => api('POST', `/channels/${id}/threadact`, body).then(() => toast(msg), (x) => toast(x.message, true));
+        const ti = [['Mark As Read', () => { S.unread.delete(id); renderChannels(); renderRail(); }], ['Copy Link', () => copy(`https://discord.com/channels/${S.gid}/${id}`)], ['-'],
+          ['Edit Thread', () => editChannel(id)], ['Leave Thread', () => { if (S.cid === id && ch.parent) openChannel(ch.parent); TA({ action: 'leave' }, 'Left thread'); }]];
+        if (ch.threadManage) ti.push(['Close Thread', () => TA({ action: 'close' }, 'Thread closed')], [ch.locked ? 'Unlock Thread' : 'Lock Thread', () => TA({ action: 'lock', on: !ch.locked }, ch.locked ? 'Thread unlocked' : 'Thread locked: only mods can reply')], ['Delete Thread', () => deleteChannel(id), 'red']);
+        ti.push(['-'], ['Copy Thread ID', () => copy(id)]);
+        menu(e, ti); return;
+      }
       const items = [['Mark As Read', () => { S.unread.delete(c.dataset.c); renderChannels(); renderRail(); }], ['Copy Link', () => copy(`https://discord.com/channels/${S.gid}/${c.dataset.c}`)]];
       if (S.gid !== DMG) items.push(['-'], ['Edit Channel', () => editChannel(c.dataset.c)], ['Create Channel', () => createChannel(ch?.parent)]);
       if (S.gid !== DMG) {
@@ -2088,7 +2096,7 @@
   addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, #log, #chans, #members, .menu')) e.preventDefault(); });
   const MI = [[/^Profile/, 'people1'], [/^Mention/, 'at'], [/^Message$|Open Chat/, 'chat'], [/^Roles/, 'shield'], [/Nickname/, 'edit'], [/^Timeout|timeout/, 'clock'], [/^Kick/, 'kick'], [/^Ban/, 'hammer'],
     [/Copy .*ID/, 'idcard'], [/^Reply/, 'reply'], [/Reaction/, 'smile'], [/^Edit/, 'edit'], [/^Copy Text|^Copy$/, 'copy'], [/Pin/, 'pin'], [/^Translate/, 'translate'], [/^Forward/, 'fwdi'],
-    [/Thread/, 'threads'], [/^Delete|^Purge|Remove timeout|Remove from history|Remove Message History/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
+    [/^Leave Thread/, 'leave'], [/^(Create|Open|View) Thread/, 'threads'], [/^Delete|^Purge|Remove timeout|Remove from history|Remove Message History/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
     [/^Create Category/, 'folder'], [/^Upload/, 'file'], [/Poll/, 'poll'], [/Embed/, 'embed'], [/Sticker/, 'sticker'], [/TTS/, 'speakerS'], [/Embeds/, 'embed'], [/Send As/, 'people1'], [/^Join/, 'speakerS'],
     [/^Disconnect/, 'leave'], [/^Publish/, 'announceS'], [/^Search Image/, 'search'], [/^Open Image/, 'image'], [/Emoji/, 'smile'], [/Add to Favourites|Remove from Favourites/, 'star'], [/^Pin$|^Unpin$/, 'pin']];
   const menuIcon = (l) => { for (const [re, k] of MI) if (re.test(l)) return I[k] || ''; return ''; };
