@@ -659,6 +659,12 @@ async function route(req, res) {
         }
       }
     }
+    if (M === 'GET' && p[3] === 'viewers') { // who can see this channel (Discord's member list is per channel)
+      if (!ch.guild) return reply(res, 200, { all: true, ids: [] });
+      const ev = ch.permissionsFor(ch.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel);
+      const ids = [...ch.guild.members.cache.values()].filter((m) => ch.permissionsFor(m)?.has(PermissionFlagsBits.ViewChannel)).map((m) => m.id);
+      return reply(res, 200, { all: !!ev && ids.length === ch.guild.members.cache.size, ids });
+    }
     if (M === 'GET' && p[3] === 'pins') { const got = await ch.messages.fetchPinned(); return reply(res, 200, { messages: [...got.values()].map(ser) }); }
     if (M === 'POST' && p[3] === 'purge') { const n = Math.max(1, Math.min(100, Number((await body(req)).count) || 0)); const del = await ch.bulkDelete(n, true); return reply(res, 200, { deleted: del.size }); }
     if (M === 'POST' && p[3] === 'typing') { stats.typing = (stats.typing || 0) + 1; await ch.sendTyping(); return reply(res, 200, { ok: true }); }

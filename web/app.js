@@ -257,14 +257,14 @@
       case 'speaking': d.on ? S.speaking.add(d.userId) : S.speaking.delete(d.userId); paintSpeaking(); break;
       case 'selfSpeaking': S.selfSpeaking = d.on; paintSpeaking(); break;
       case 'voice': onVoiceState(d.v, d.why); break;
-      case 'guild': { const old = S.guilds.get(d.g.id); S.guilds.set(d.g.id, d.g); if (!old) renderRail(); if (d.g.id === S.gid) { renderChannels(); renderHead(); } break; }
+      case 'guild': { VIEWERS.clear(); const old = S.guilds.get(d.g.id); S.guilds.set(d.g.id, d.g); if (!old) renderRail(); if (d.g.id === S.gid) { renderChannels(); renderHead(); } break; }
       case 'guildGone': S.guilds.delete(d.id); renderRail(); break;
       case 'presence': {
         const ms = S.members.get(d.guildId); const m = ms?.byId.get(d.userId);
         if (m) { const moved = (m.status === 'offline') !== (d.status === 'offline'); Object.assign(m, { status: d.status, activity: d.activity, custom: d.custom, platforms: d.platforms || m.platforms }); if (d.guildId === S.gid) moved ? renderMembersSoon() : patchMember(m); }
         break;
       }
-      case 'membersStale': S.members.delete(d.guildId); if (d.guildId === S.gid) loadMembers(d.guildId); break;
+      case 'membersStale': VIEWERS.clear(); S.members.delete(d.guildId); if (d.guildId === S.gid) loadMembers(d.guildId); break;
       case 'dm': if (!S.dms.some((x) => x.id === d.dm.id)) { S.dms.unshift(d.dm); if (S.gid === DMG) renderChannels(); } break;
       case 'approve': {
         if (!CL.open) toggleClaude(true);
@@ -699,6 +699,7 @@
     if (a === 'deaf') $('#bdeaf').click();
     if (a === 'chat') { S.callChat = !S.callChat; store.set('callChat', S.callChat); renderCall(); if (S.callChat) scrollBottom(); }
     renderCall();
+    if (VIEWERS.has(cid)) renderMembers(); else { renderMembers(); loadViewers(cid); }
   });
   $('#callgrid').addEventListener('contextmenu', (e) => { const t = e.target.closest('.tile'); if (t) { e.preventDefault(); userMenu(e, t.dataset.uid, true); } });
   function paintSpeaking() {
@@ -740,8 +741,17 @@
   }
   let rmT = null;
   const renderMembersSoon = () => { if (!rmT) rmT = setTimeout(() => { rmT = null; renderMembers(); }, 250); };
+  const VIEWERS = new Map(); // channel id -> Set of member ids who can see it (null = everyone)
+  async function loadViewers(cid) {
+    if (!cid || VIEWERS.has(cid) || S.gid === DMG) return;
+    VIEWERS.set(cid, undefined);
+    try { const r = await api('GET', `/channels/${cid}/viewers`); VIEWERS.set(cid, r.all ? null : new Set(r.ids)); if (S.cid === cid) renderMembers(); }
+    catch { VIEWERS.delete(cid); }
+  }
   function renderMembers() {
-    const ms = S.members.get(S.gid), g = S.guilds.get(S.gid);
+    const ms0 = S.members.get(S.gid), g = S.guilds.get(S.gid);
+    const vw = VIEWERS.get(S.cid);
+    const ms = ms0 && vw ? { ...ms0, members: ms0.members.filter((m) => vw.has(m.id)) } : ms0;
     if (!ms || !g) { $('#members').innerHTML = ''; return; }
     const groups = new Map(ms.roles.map((r) => [r.id, { role: r, list: [] }]));
     const online = { role: { name: 'Online' }, list: [] }, offline = { role: { name: 'Offline' }, list: [] };
