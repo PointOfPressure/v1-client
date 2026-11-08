@@ -220,6 +220,14 @@ fn main() {
                 let _ = w.with_webview(|wv| {
                     use webkit2gtk::{SettingsExt, WebViewExt};
                     if let Some(st) = WebViewExt::settings(&wv.inner()) { st.set_enable_smooth_scrolling(false); }
+                    // V1 restarting = connection refused: show a black "Reconnecting" page that retries, not WebKit's white error page
+                    wv.inner().connect_load_failed(|v, _ev, uri, err| {
+                        if err.matches(webkit2gtk::PolicyError::FrameLoadInterruptedByPolicyChange) || err.matches(webkit2gtk::NetworkError::Cancelled) { return false; } // links we open outside
+                        let u = uri.replace('\\', "").replace('"', "");
+                        let html = format!(r#"<!doctype html><body style="margin:0;background:#000;color:#fff;font:15px sans-serif;display:grid;place-items:center;height:100vh">Reconnecting to V1…<script>setTimeout(()=>location.replace("{u}"),2000)</script></body>"#);
+                        v.load_alternate_html(&html, uri, Some(uri));
+                        true
+                    });
                 });
             }
             voice::start_ptt(shared.clone());

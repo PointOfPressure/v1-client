@@ -2771,7 +2771,7 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
     if (!wantReload) return;
     if (busy()) { setTimeout(tryReload, 5000); return; }
     saveDraft();
-    location.reload();
+    fetch(API + '/index.html', { method: 'HEAD', cache: 'no-store' }).then((r) => { if (r.ok) location.reload(); else setTimeout(tryReload, 3000); }, () => setTimeout(tryReload, 3000)); // only reload when V1 is up
   }
   // drafts per channel survive reloads and channel switches, like Discord
   const DRAFTS = store.get('drafts', {});
