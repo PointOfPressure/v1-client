@@ -1044,7 +1044,7 @@
     const rx = m.reactions.length ? `<div class="rxs">${m.reactions.map((x) => `<button class="rx${x.me ? ' me' : ''}" data-rx="${esc(x.key)}">${emojiImg(x)}<span>${x.count}</span></button>`).join('')}<button class="rx add" data-act="react" title="Add reaction">${I.smile}</button></div>` : '';
     const tr = m.translated ? `<div class="trans"><b>Translated</b> ${esc(m.translated)}</div>` : '';
     const quick = topReactions().map((k) => `<button class="qr" data-qr="${esc(k.key)}" title="React ${esc(k.name)}">${k.img ? `<img src="${esc(k.img)}" alt="">` : `<span class="ue">${k.uni}</span>`}</button>`).join('');
-    const tools = m.deleted ? `<div class="tools"><button data-act="hidedel" title="Remove from history">${I.trash}</button></div>` : `<div class="tools">${quick}${quick ? '<i class="tsep"></i>' : ''}${m.content ? `<button data-act="translate" title="Translate">${I.translate}</button>` : ''}<button data-act="react" title="Add reaction">${I.smile}</button>${own && !m.deleted && m.content ? `<button data-act="edit" title="Edit">${I.edit}</button>` : `<button data-act="reply" title="Reply">${I.reply}</button>`}${m.deleted ? '' : `<button data-act="forward" title="Forward">${I.fwdi}</button>`}<button data-act="more" title="More">${I.dots}</button>${m.deleted ? '' : `<button class="del shiftonly" data-act="delete" title="Delete">${I.trash}</button>`}</div>`;
+    const tools = m.deleted ? `<div class="tools"><button data-act="hidedel" title="Remove from history">${I.trash}</button></div>` : `<div class="tools">${quick}${quick ? '<i class="tsep"></i>' : ''}${m.content ? `<button data-act="translate" title="Translate">${I.translate}</button>` : ''}<button data-act="react" title="Add reaction">${I.smile}</button>${own && !m.deleted && m.content ? `<button data-act="edit" title="Edit">${I.edit}</button>` : `<button data-act="reply" title="Reply">${I.reply}</button>`}${m.deleted ? '' : `<button data-act="forward" title="Forward">${I.fwdi}</button>`}<button data-act="more" title="More">${I.dots}</button>${canDelete(m) ? `<button class="del shiftonly" data-act="delete" title="Delete">${I.trash}</button>` : ''}</div>`;
     const fwd = (m.forwarded || []).map((f) => `<div class="fwdbox"><div class="fwdh">${I.reply} Forwarded</div>${f.content ? `<div class="markup">${md(f.content, m)}</div>` : ''}${f.attachments.length ? `<div class="atts">${f.attachments.map(attHTML).join('')}</div>` : ''}${f.embeds.map((e) => embedHTML(e, m)).join('')}</div>`).join('');
     const comps = compHTML(m.components || []);
     const thr = m.thread ? `<div class="thrchip" data-thread="${m.thread.id}">${I.chat}<b>${esc(m.thread.name)}</b><span>${m.thread.count} message${m.thread.count === 1 ? '' : 's'}</span></div>` : '';
@@ -1090,6 +1090,8 @@
     while (topCache.length < 3) { const f = fall.find((x) => !topCache.some((t) => t.key === x)); topCache.push({ key: f, name: f, uni: f }); }
     topAt = Date.now(); return topCache;
   };
+  // V1 can delete its own messages anywhere, others' only in servers where it has Manage Messages (never in DMs)
+  const canDelete = (m) => !m.deleted && (m.author.id === S.me.id || m.webhook && m.author.id === 'webhook' || (!!m.guildId && !!chan(m.channelId)?.manage));
   const guildOwner = (gid) => S.guilds.get(gid)?.owner;
   const tm = (x) => { x = Math.max(0, Math.floor(x || 0)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; };
   function audioHTML(a, voice) { // Discord's audio card, or the voice-message pill with its waveform
@@ -1454,7 +1456,7 @@
     if (!m.deleted && m.guildId && !m.thread) items.push(['Create Thread', async () => { const n = await ask({ title: 'Create Thread', input: { label: 'Thread name', value: (m.content || 'Thread').slice(0, 60) }, ok: 'Create' }); if (n) api('POST', `/channels/${m.channelId}/messages/${m.id}/thread`, { name: n }).then((r) => openChannel(r.id), (x) => toast(x.message, true)); }]);
     items.push(['Mention Author', () => mention(m.author.id, m.author.name)], ['Copy Message Link', () => copy(`https://discord.com/channels/${m.guildId || '@me'}/${m.channelId}/${m.id}`)], ['Copy Message ID', () => copy(m.id)]);
     if (m.history?.length) items.push(['Remove Message History', () => { m.history = []; rerender(m); }]);
-    if (!m.deleted) items.push(['-'], ['Delete Message', () => delMessage(m, true), 'red']);
+    if (canDelete(m)) items.push(['-'], ['Delete Message', () => delMessage(m, true), 'red']);
     menu(e, items, () => el.classList.remove('ctx'));
   });
   // WhoReacted: hover a reaction to see who
