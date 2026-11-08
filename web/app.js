@@ -1150,7 +1150,20 @@
     }
     const log = $('#log'); log.innerHTML = html; twe(log); hydrate(log);
   }
-  function rerender(m) {
+  // keep what you're looking at still while a message above/among it changes height (reactions, edits, polls)
+  function keepScroll(fn) {
+    const sc = $('#scroller');
+    if (pinned || nearBottom()) { fn(); scrollBottom(); return; }
+    const top = sc.getBoundingClientRect().top;
+    let anchor = null, off = 0;
+    for (const el of $('#log').children) { const r = el.getBoundingClientRect(); if (r.bottom > top + 1) { anchor = el; off = r.top - top; break; } }
+    const id = anchor?.dataset?.id;
+    fn();
+    const now = id ? $(`#log [data-id="${id}"]`) : anchor;
+    if (now && now.isConnected) sc.scrollTop += (now.getBoundingClientRect().top - top) - off;
+  }
+  function rerender(m) { keepScroll(() => rerenderNow(m)); }
+  function rerenderNow(m) {
     if (m.channelId !== S.cid) return;
     const list = S.msgs.get(S.cid); const i = list.indexOf(m);
     const el = $(`.msg[data-id="${m.pending ? 'p' + m.nonce : m.id}"]`); if (!el || i < 0) return;
