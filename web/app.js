@@ -1858,7 +1858,7 @@
   addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, #log, #chans, #members, .menu')) e.preventDefault(); });
   const MI = [[/^Profile/, 'people1'], [/^Mention/, 'at'], [/^Message$|Open Chat/, 'chat'], [/^Roles/, 'shield'], [/Nickname/, 'edit'], [/^Timeout|timeout/, 'clock'], [/^Kick/, 'kick'], [/^Ban/, 'hammer'],
     [/Copy .*ID/, 'idcard'], [/^Reply/, 'reply'], [/Reaction/, 'smile'], [/^Edit/, 'edit'], [/^Copy Text|^Copy$/, 'copy'], [/Pin/, 'pin'], [/^Translate/, 'translate'], [/^Forward/, 'fwdi'],
-    [/Thread/, 'threads'], [/^Delete|Remove timeout/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
+    [/Thread/, 'threads'], [/^Delete|Remove timeout|Remove from history|Remove Message History/, 'trash'], [/Mark As Read/, 'read'], [/Copy .*Link|Copy Link/, 'link'], [/^Invite/, 'invite'], [/Settings/, 'gear'], [/^Create Channel/, 'plus'],
     [/^Create Category/, 'folder'], [/^Upload/, 'file'], [/Poll/, 'poll'], [/Embed/, 'embed'], [/Sticker/, 'sticker'], [/TTS/, 'speakerS'], [/Embeds/, 'embed'], [/Send As/, 'people1'], [/^Join/, 'speakerS'],
     [/^Disconnect/, 'leave'], [/^Publish/, 'announceS'], [/^Search Image/, 'search'], [/^Open Image/, 'image'], [/Emoji/, 'smile'], [/Add to Favourites|Remove from Favourites/, 'star'], [/^Pin$|^Unpin$/, 'pin']];
   const menuIcon = (l) => { for (const [re, k] of MI) if (re.test(l)) return I[k] || ''; return ''; };
