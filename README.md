@@ -4,6 +4,17 @@
 
 A Discord client that lets a bot's owner use Discord *as the bot*: chat, DMs, voice, server management, polls, GIFs, a Claude panel that can act through the bot. It uses the bot's normal token, so there's no self-botting and no user token anywhere.
 
+## What's in it
+
+- **Chat:** servers, channels, threads, DMs (opened by the bot), live edits/deletes, scrollback, instant (optimistic) sends kept in the server's order, replies, mentions with autocomplete, `:emoji:` shortcodes, reactions, uploads and pasted images, drafts per channel, inline editing, polls, embeds with link buttons, stickers, forwarding, send-as (webhook), TTS and silent messages.
+- **Looks like Discord:** Onyx/Dark/Ash themes, Discord's sizes, gg sans and Discord's icons if you supply them, profile popouts with banners, decorations, server tags and badges, role colours and icons, nameplates, platform indicators.
+- **Built-in Vencord-style plugins (toggleable):** message logger, who reacted, typing indicators, message link previews, image zoom and gallery, quick reply, double-click actions, call timer, pinned DMs, private nicknames and notes, ClearURLs, translate.
+- **Pickers:** one expression picker (GIFs with favourites and providers, stickers, emoji with frecency, skin tones and keyboard control), Ctrl+K quick switcher, editable keybinds.
+- **Voice:** native Opus with RNNoise, voice activity or global push-to-talk, per-user volume up to 300%, a call view, and a "voice lock" that keeps the bot's own voice features out of the way while you're connected.
+- **Server management:** settings for overview, roles and permissions, emoji, stickers, invites, bans, audit log, webhooks; channel create/edit/delete; kick, ban, timeout, roles, nicknames, purge, pins.
+- **Claude panel:** a floating window running Claude Code with only the bot's tools (plus web search). Anything destructive shows an Allow/Deny card first.
+- **Speed:** channels preload, GIF videos become cached animated WebP (WebKit's video player deadlocks on GIF-heavy channels), off-screen rows are skipped, the UI updates itself when you deploy a new `web/`.
+
 ## How it fits together
 
 ```
