@@ -815,7 +815,7 @@
         ${p.activity ? `<div class="pact2">${p.activity.image ? `<img src="${esc(p.activity.image)}" alt="">` : ''}<div><div>${actTxt}</div>${p.activity.details ? `<div class="sm">${esc(p.activity.details)}</div>` : ''}${p.activity.state ? `<div class="sm">${esc(p.activity.state)}</div>` : ''}</div></div>` : ''}
         ${inVc ? `<div class="psec"><h5>In Voice</h5><div class="pvc">${I.speakerS}${esc(chan(inVc[0])?.name ?? '')}</div></div>` : ''}
         <div class="psec"><h5>Member Since</h5><div class="psince"><span>${I.dm}${new Date(p.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>${p.joined ? `<i class="psd"></i><span>${p.guildIcon ? `<img src="${esc(p.guildIcon)}" alt="">` : ''}${new Date(p.joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}</div></div>
-        ${p.roles?.length || p.canRoles ? `<div class="psec"><h5>Roles</h5><div class="roles">${(p.roles || []).map((x) => `<span class="role"><i style="${x.color ? `background:${x.color}` : ''}"></i>${esc(x.name)}</span>`).join('')}${p.canRoles && p.id !== S.me.id ? `<button class="role add" data-pa="roles" title="Edit roles">${I.plus}</button>` : ''}</div></div>` : ''}
+        ${p.roles?.length || p.canRoles ? `<div class="psec"><h5>Roles</h5><div class="roles">${(p.roles || []).map((x) => `<span class="role" data-role="${x.id}"><i style="${x.color ? `background:${x.color}` : ''}"></i>${esc(x.name)}</span>`).join('')}${p.canRoles && p.id !== S.me.id ? `<button class="role add" data-pa="roles" title="Edit roles">${I.plus}</button>` : ''}</div></div>` : ''}
         <div class="psec"><h5>Note <span class="pnh">(only visible to you)</span></h5><textarea class="pnote" placeholder="Click to add a note" rows="1">${esc(note)}</textarea></div>
         ${p.bot || p.id === S.me.id ? '' : `<input class="pmsg" placeholder="Message @${esc(nickOf(p) || p.name)}">`}
       </div></div>`;
@@ -879,10 +879,25 @@
   }
   async function rolesPop(uid, e) {
     let r; try { r = await api('GET', `/guilds/${S.gid}/members/${uid}/roles`); } catch (x) { toast(x.message, true); return; }
-    const p = showPop(e.clientX, e.clientY, `<div class="menu roles-pop"><input class="rsearch" placeholder="Search roles">${r.roles.map((x) => `<label class="rrow${x.can ? '' : ' no'}" data-name="${esc(x.name.toLowerCase())}"><input type="checkbox" data-r="${x.id}"${x.has ? ' checked' : ''}${x.can ? '' : ' disabled'}><i style="background:${x.color || '#80848e'}"></i>${esc(x.name)}</label>`).join('')}</div>`);
-    p.querySelector('.rsearch').oninput = (ev) => { const q = ev.target.value.toLowerCase(); for (const l of p.querySelectorAll('.rrow')) l.hidden = !l.dataset.name.includes(q); };
-    p.querySelector('.rsearch').focus();
-    p.onchange = (ev) => { const c = ev.target.closest('[data-r]'); if (!c) return; api('POST', `/guilds/${S.gid}/members/${uid}/role`, { roleId: c.dataset.r, add: c.checked }).catch((x) => { toast(x.message, true); c.checked = !c.checked; }); };
+    hideMenu();
+    cm.innerHTML = `<div class="menu roles-pop"><input class="rsearch" placeholder="Search roles">${r.roles.map((x) => `<button class="rrow${x.has ? ' on' : ''}${x.can ? '' : ' no'}" data-r="${x.id}" data-name="${esc(x.name.toLowerCase())}" title="${x.can ? '' : 'V1 can\'t assign this role: it\'s above V1\'s top role, or managed by an integration'}"><i style="background:${x.color || '#99aab5'}"></i><span>${esc(x.name)}</span>${x.can ? '<b class="rcheck"></b>' : I.lock}</button>`).join('')}</div>`;
+    cm.hidden = false;
+    const w = cm.offsetWidth, h = cm.offsetHeight;
+    cm.style.left = Math.max(8, Math.min(e.clientX, innerWidth - w - 8)) + 'px'; cm.style.top = Math.max(8, Math.min(e.clientY, innerHeight - h - 8)) + 'px';
+    const inp = cm.querySelector('.rsearch'); inp.focus();
+    inp.oninput = () => { const q = inp.value.toLowerCase(); for (const l of cm.querySelectorAll('.rrow')) l.hidden = !l.dataset.name.includes(q); };
+    inp.onkeydown = (ev) => ev.stopPropagation();
+    cm.onclick = (ev) => {
+      const b2 = ev.target.closest('.rrow'); if (!b2 || b2.classList.contains('no')) return;
+      const add = !b2.classList.contains('on'); b2.classList.toggle('on', add);
+      const role = r.roles.find((x) => x.id === b2.dataset.r);
+      api('POST', `/guilds/${S.gid}/members/${uid}/role`, { roleId: role.id, add }).then(() => {
+        const pills = document.querySelector('#pop .prof .roles'); if (!pills) return; // keep the open profile in step
+        const ex = pills.querySelector(`[data-role="${role.id}"]`);
+        if (add && !ex) pills.querySelector('.role.add')?.insertAdjacentHTML('beforebegin', `<span class="role" data-role="${role.id}"><i style="${role.color ? `background:${role.color}` : ''}"></i>${esc(role.name)}</span>`);
+        if (!add) ex?.remove();
+      }, (x) => { toast(x.message, true); b2.classList.toggle('on', !add); });
+    };
   }
   const memberById = (uid) => { for (const ms of S.members.values()) { const m = ms.byId.get(uid); if (m) return m; } return null; };
 

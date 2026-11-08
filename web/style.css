@@ -1090,3 +1090,15 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .embed > *, .embed .edesc, .embed .ef, .embed .etitle { min-width: 0; overflow-wrap: anywhere; }
 .embed .markup pre { max-width: 100%; }
 .embed .markup pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* role picker, Discord-style */
+.menu.roles-pop { width: 260px; max-height: 360px; overflow-y: auto; padding: 8px; }
+.menu.roles-pop .rsearch { width: 100%; box-sizing: border-box; height: 34px; margin: 0 0 6px; }
+.menu.roles-pop .rrow { display: flex !important; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border-radius: 6px; font-size: 14px; font-weight: 500; color: #fff; opacity: 1 !important; }
+.menu.roles-pop .rrow:hover { background: var(--hover) !important; }
+.menu.roles-pop .rrow i { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.menu.roles-pop .rrow span { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcheck { width: 18px; height: 18px; border-radius: 5px; border: 2px solid #4e5058; flex: none; position: relative; }
+.rrow.on .rcheck { background: var(--accent); border-color: var(--accent); }
+.rrow.on .rcheck::after { content: ""; position: absolute; left: 4px; top: 0; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.menu.roles-pop .rrow svg { width: 14px; height: 14px; flex: none; }
+.menu.roles-pop .rrow.no { cursor: default; }
