@@ -127,9 +127,19 @@
     ['mute', 'Mute'], ['unmute', 'Unmute'], ['deafen', 'Deafen'], ['undeafen', 'Undeafen'], ['pttOn', 'Push to talk start'], ['pttOff', 'Push to talk end']];
   const SND = Object.assign({ volume: 0.5, pttOn: false, pttOff: false }, store.get('sounds', {}));
   let actx = null;
+  // Discord's own sounds when they're present in sounds/ (fetched locally, not in the repo); tones otherwise
+  const SFX_FILE = { message: 'message1', join: 'user_join', leave: 'user_leave', connect: 'user_join', disconnect: 'disconnect', mute: 'mute', unmute: 'unmute', deafen: 'deafen', undeafen: 'undeafen', pttOn: 'ptt_start', pttOff: 'ptt_stop' };
+  const SFX_BUF = {};
+  function loadSfx() {
+    try { actx ??= new AudioContext(); } catch { return; }
+    for (const f of new Set(Object.values(SFX_FILE))) fetch(`sounds/${f}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => actx.decodeAudioData(b)).then((buf) => { SFX_BUF[f] = buf; }).catch(() => {});
+  }
+  setTimeout(loadSfx, 2000);
   function sfx(kind) {
     if (SND[kind] === false || !SND.volume) return;
     try { actx ??= new AudioContext(); } catch { return; }
+    const buf = SFX_BUF[SFX_FILE[kind]];
+    if (buf) { if (actx.state === 'suspended') actx.resume(); const src = actx.createBufferSource(), g = actx.createGain(); g.gain.value = SND.volume; src.buffer = buf; src.connect(g).connect(actx.destination); src.start(); return; }
     const seq = { message: [[880, 0, .09], [1320, .07, .14]], join: [[523, 0, .1], [784, .09, .16]], leave: [[784, 0, .1], [523, .09, .16]],
       connect: [[523, 0, .08], [659, .07, .08], [784, .14, .16]], disconnect: [[784, 0, .08], [659, .07, .08], [523, .14, .16]],
       mute: [[440, 0, .07], [330, .06, .09]], unmute: [[330, 0, .07], [440, .06, .09]], deafen: [[392, 0, .08], [262, .07, .14]], undeafen: [[262, 0, .08], [392, .07, .14]],
