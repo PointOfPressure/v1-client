@@ -112,9 +112,9 @@ img { -webkit-user-drag: none; }
 .av > i.idle, .pav > i.idle { --scol: var(--idle); }
 .av > i.dnd, .pav > i.dnd { --scol: var(--dnd); }
 .av > i.streaming, .pav > i.streaming { --scol: #593695; }
-.prof .pav > i svg { position: absolute; inset: 6px; width: auto; height: auto; }
+.prof .pav > i svg { position: absolute; left: 4px; top: 4px; width: calc(100% - 8px); height: calc(100% - 8px); }
 .prof .pav > i { --ring: var(--menu); }
-.fprof .pav > i svg { inset: 8px; }
+.fprof .pav > i svg { left: 6px; top: 6px; width: calc(100% - 12px); height: calc(100% - 12px); }
 .av.talk::before { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--good); }
 
 #dockpanel { position: absolute; left: 8px; bottom: 8px; width: calc(var(--sw, 268px) + 56px); z-index: 6; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

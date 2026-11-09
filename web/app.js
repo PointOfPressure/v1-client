@@ -1341,11 +1341,17 @@
   const animIO = new IntersectionObserver((ents) => {
     for (const en of ents) {
       const im = en.target;
-      if (en.isIntersecting) { if (im.dataset.asrc) { im.src = im.dataset.asrc; delete im.dataset.asrc; } }
+      if (en.isIntersecting) { if (im.dataset.asrc && animOn) { im.src = im.dataset.asrc; delete im.dataset.asrc; } }
       else if (im.src && im.src !== BLANK && !im.src.startsWith('data:')) { const r = im.getBoundingClientRect(); if (r.width && r.height) { im.style.width = r.width + 'px'; im.style.height = r.height + 'px'; } im.dataset.asrc = im.src; im.src = BLANK; }
     }
-  }, { rootMargin: '800px 0px' });
-  const watchAnim = (root) => { for (const im of root.querySelectorAll('img.gifimg:not([data-aw]), .gifm img:not([data-aw]), .gtile img:not([data-aw]), .gcat img:not([data-aw])')) { im.dataset.aw = 1; animIO.observe(im); } };
+  }, { rootMargin: '300px 0px' });
+  const ANIMSEL = 'img.gifimg, .gifm img, .gtile img, .gcat img, img.emoji[src*=".gif"]';
+  const watchAnim = (root) => { for (const im of root.querySelectorAll(ANIMSEL.split(', ').map((x) => x + ':not([data-aw])').join(', '))) { im.dataset.aw = 1; if (!animOn && im.src && !im.src.startsWith('data:')) { im.dataset.asrc = im.src; im.src = BLANK; } animIO.observe(im); } };
+  // like Discord: GIFs and animated emojis only play while V1 Client is focused (saves memory and CPU while gaming)
+  let animOn = document.hasFocus();
+  const stopAnim = () => { for (const im of document.querySelectorAll(ANIMSEL)) if (im.src && !im.src.startsWith('data:')) { const r = im.getBoundingClientRect(); if (r.width && r.height) { im.style.width = r.width + 'px'; im.style.height = r.height + 'px'; } im.dataset.asrc = im.src; im.src = BLANK; } };
+  addEventListener('blur', () => { animOn = false; setTimeout(() => { if (!animOn) stopAnim(); }, 1500); });
+  addEventListener('focus', () => { animOn = true; for (const im of document.querySelectorAll('img[data-asrc]')) { animIO.unobserve(im); animIO.observe(im); } });
   new MutationObserver(() => watchAnim(document.body)).observe(document.body, { childList: true, subtree: true });
   let pinned = true;
   new ResizeObserver(() => { if (pinned) scrollBottom(); }).observe($('#log'));
