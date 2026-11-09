@@ -1345,13 +1345,15 @@
     while (i > 0 && (list[i - 1].pending || after(list[i - 1].id, m.id))) i--;
     list.splice(i, 0, m); return i;
   }
+  // a removed message takes its date line with it when nothing else from that day is left under it
+  function dropMsgEl(el) { if (!el) return; const d = el.previousElementSibling, n = el.nextElementSibling; el.remove(); if (d?.classList.contains('daysep') && (!n || n.classList.contains('daysep'))) d.remove(); }
   function addMsg(m) {
     S.typing.get(m.channelId)?.delete(m.author.id); // typing stops when they post
     const list = S.msgs.get(m.channelId);
     let idx = -1, replaced = false;
     if (list) {
       const pend = m.nonce ? list.findIndex((x) => x.pending && x.nonce === m.nonce) : -1;
-      if (pend >= 0) { list.splice(pend, 1); replaced = true; document.querySelector(`.msg[data-id="p${m.nonce}"]`)?.remove(); }
+      if (pend >= 0) { list.splice(pend, 1); replaced = true; dropMsgEl(document.querySelector(`.msg[data-id="p${m.nonce}"]`)); }
       if (list.some((x) => x.id === m.id)) return; // already shown (e.g. a webhook send's gateway event arrived first)
       idx = placeSorted(list, m);
       if (list.length > 500) { list.splice(0, list.length - 350); S.more.set(m.channelId, true); idx = list.indexOf(m); }
@@ -1426,7 +1428,7 @@
   }
   function delMsg(cid, id) { // MessageLogger: deleted messages stay, marked red
     const m = findMsg(cid, id); if (!m) return;
-    if (!on('MessageLogger') || m.author.id === S.me.id) { const list = S.msgs.get(cid); list.splice(list.indexOf(m), 1); if (cid === S.cid) $(`.msg[data-id="${id}"]`)?.remove(); return; }
+    if (!on('MessageLogger') || m.author.id === S.me.id) { const list = S.msgs.get(cid); list.splice(list.indexOf(m), 1); if (cid === S.cid) dropMsgEl($(`.msg[data-id="${id}"]`)); return; }
     m.deleted = true;
     for (const a of m.attachments) if (a.id && /^(image|video)\//.test(a.type || '')) { a.url = a.proxy = `${API}/att/${a.id}?k=${encodeURIComponent(KEY)}`; } // V1 kept a copy; Discord's is gone
     rerender(m);
@@ -1516,11 +1518,11 @@
     if (act && m) {
       const a = act.dataset.act;
       if (a === 'retry') { m.failed = null; rerender(m); sendPending(m); return; }
-      if (a === 'discard') { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); el.remove(); return; }
+      if (a === 'discard') { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); dropMsgEl(el); return; }
       if (a === 'reply') startReply(m);
       if (a === 'edit') startEdit(m);
       if (a === 'delete') delMessage(m, e.shiftKey);
-      if (a === 'hidedel') { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); el.remove(); return; }
+      if (a === 'hidedel') { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); dropMsgEl(el); return; }
       if (a === 'translate') translate(m);
       if (a === 'forward') forwardPop(m, e);
       if (a === 'more') el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: e.clientX - 180, clientY: e.clientY + 10 }));
@@ -1569,7 +1571,7 @@
     e.preventDefault();
     el.classList.add('ctx');
     if (m.deleted) { // MessageLogger: a deleted message only offers to be removed from history
-      menu(e, [['Remove from history', () => { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); el.remove(); }, 'red']], () => el.classList.remove('ctx'));
+      menu(e, [['Remove from history', () => { const l = S.msgs.get(m.channelId); l.splice(l.indexOf(m), 1); dropMsgEl(el); }, 'red']], () => el.classList.remove('ctx'));
       return;
     }
     const sel = String(getSelection() || '');
