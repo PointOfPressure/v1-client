@@ -1118,17 +1118,27 @@
     const t = e.target.closest('.topic'); if (t) showPop(t.getBoundingClientRect().left, 56, `<div class="menu" style="max-width:480px;padding:14px;font-size:14px;white-space:pre-wrap;user-select:text">${MD.render(t.title)}</div>`);
   });
 
-  const SYS = { 6: 'pinned a message.', 7: 'joined the server.', 8: 'boosted the server.', 9: 'boosted the server.', 10: 'boosted the server.', 11: 'boosted the server.',
-    12: 'followed a channel here.', 18: 'started a thread.', 37: 'resumed server activity.', 38: 'reported a raid.', 39: 'reported a false alarm.',
-    36: (m) => `paused server activity until ${fmtWhen(Date.parse(m.content))}.` };
+  // Discord's own wording; the join line is picked from the message's timestamp like Discord does
+  const JOINS = ['{u} joined the party.', '{u} is here.', 'Welcome, {u}. We hope you brought pizza.', 'A wild {u} appeared.', '{u} just landed.', '{u} just slid into the server.',
+    '{u} just showed up!', 'Welcome {u}. Say hi!', '{u} hopped into the server.', 'Everyone welcome {u}!', "Glad you're here, {u}.", 'Good to see you, {u}.', 'Yay you made it, {u}!'];
+  const SYS_JOIN = '<svg viewBox="0 0 18 18"><path fill="currentColor" d="m0 8h14.2l-3.6-3.6 1.4-1.4 6 6-6 6-1.4-1.4 3.6-3.6h-14.2"/></svg>';
+  const SYS_BOOST = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M11.47 6.55a.75.75 0 0 1 1.06 0l2.2 2.14c.14.14.23.34.23.55v5.52c0 .21-.09.4-.23.55l-2.2 2.14a.75.75 0 0 1-1.06 0l-2.2-2.14a.77.77 0 0 1-.23-.55V9.24c0-.21.09-.41.23-.55l2.2-2.14Z"/><path fill="currentColor" fill-rule="evenodd" d="M10.95 1.43a1.5 1.5 0 0 1 2.1 0l5.49 5.33c.3.29.46.68.46 1.1v8.44c-.04.35-.2.69-.46.94l-5.49 5.33-.11.1a1.5 1.5 0 0 1-2-.1l-5.48-5.33c-.3-.29-.46-.68-.46-1.1V7.86c0-.42.17-.81.46-1.1l5.49-5.33ZM7.29 7.76c-.2.2-.3.46-.3.73v7.02c0 .27.1.54.3.73l4 3.9a1 1 0 0 0 1.41 0l4-3.9c.2-.2.31-.46.31-.73V8.49c0-.27-.1-.54-.3-.73l-4-3.9a1 1 0 0 0-1.41 0l-4 3.9Z"/></svg>';
+  const boost = (n) => [SYS_BOOST, '#ff73fa', (u) => n ? `${u} just boosted the server! The server has achieved <b>Level ${n}!</b>` : `${u} just boosted the server!`];
+  const SYS = { 6: [I.pin, '', (u) => `${u} pinned <span class="syslink" data-sys="pins">a message</span> to this channel. See all <span class="syslink" data-sys="pins">pinned messages</span>.`],
+    7: [SYS_JOIN, 'var(--good)', (u, m) => JOINS[Number(BigInt(m.id) >> 22n) % JOINS.length].replace('{u}', u)],
+    8: boost(0), 9: boost(1), 10: boost(2), 11: boost(3),
+    12: [SYS_JOIN, 'var(--good)', (u) => `${u} has added a channel to this channel. Its most important updates will show up here.`],
+    18: [I.threads, '', (u, m) => `${u} started a thread: <b>${esc(m.content || 'thread')}</b>. See all <span class="syslink" data-sys="threads">threads</span>.`],
+    37: [I.shield ?? SYS_JOIN, 'var(--good)', (u) => `${u} resumed server activity.`], 38: [I.shield ?? SYS_JOIN, 'var(--dnd)', (u) => `${u} reported a raid.`], 39: [I.shield ?? SYS_JOIN, 'var(--good)', (u) => `${u} reported a false alarm.`],
+    36: [I.shield ?? SYS_JOIN, 'var(--idle)', (u, m) => `${u} paused server activity until ${fmtWhen(Date.parse(m.content))}.`] };
   const grouped = (p, m) => p && p.author.id === m.author.id && !m.reply && !(p.system && SYS[p.type]) && m.ts - p.ts < 7 * 60e3 && dayKey(p.ts) === dayKey(m.ts);
   function msgHTML(m, prev) {
     setCtx(m);
     const day = !prev || dayKey(prev.ts) !== dayKey(m.ts) ? `<div class="daysep"><span>${new Date(m.ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>` : '';
     const sys = m.system && SYS[m.type];
     if (sys) {
-      const what = typeof sys === 'function' ? sys(m) : sys;
-      return day + `<div class="msg sys" data-id="${m.id}"><span class="sysic">${P('M5 12h14m-6-6 6 6-6 6')}</span><b class="name" data-uid="${m.author.id}">${esc(m.author.name)}</b> ${what}<span class="when">${fmtWhen(m.ts)}</span></div>`;
+      const [ic, col, txt] = sys, who = `<b class="name${m.author.grad ? ' grad' : ''}" data-uid="${m.author.id}" style="${nameStyle(m.author)}">${esc(nickOf(m.author) || m.author.name)}</b>`;
+      return day + `<div class="msg sys" data-id="${m.id}"><span class="sysic"${col ? ` style="color:${col}"` : ''}>${ic}</span><span class="systxt">${txt(who, m)}</span><span class="when">${fmtWhen(m.ts)}</span></div>`;
     }
     const cont = !day && grouped(prev, m);
     const own = m.author.id === S.me.id;
@@ -1474,6 +1484,7 @@
   $('#log').addEventListener('input', (e) => { const v = e.target.closest('.avr'); if (v) { const au = audioOf(v.closest('[data-audio]')); au.volume = v.value / 100; au.muted = false; store.set('audioVol', au.volume); return; } });
   $('#log').addEventListener('play', (e) => { if (e.target.tagName === 'AUDIO') e.target.volume = store.get('audioVol', 1); }, true);
   $('#log').addEventListener('input', (e) => { const s2 = e.target.closest('.aseek'); if (!s2) return; const au = audioOf(s2.closest('[data-audio]')); if (au.duration) au.currentTime = s2.value / 1000 * au.duration; });
+  $('#log').addEventListener('click', (e) => { const sl = e.target.closest('[data-sys]'); if (sl) $(sl.dataset.sys === 'pins' ? '#tpins' : '#tthreads')?.click(); });
   $('#log').addEventListener('click', (e) => {
     const pl = e.target.closest('.aplay'); const vol = e.target.closest('.avol');
     if (!pl && !vol) return;
@@ -2915,6 +2926,17 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
   function flushWheel() { wheelRaf = 0; if (wheelEl && wheelAcc) wheelEl.scrollTop += wheelAcc; wheelAcc = 0; }
 
   // ------------------------------------------------------------------ resizable panes
+  { // the chat beside a voice channel: drag its left edge like Discord's
+    const cw = store.get('callChatW', 400); $('#main').style.setProperty('--cw', cw + 'px');
+    const h = document.createElement('div'); h.className = 'grip callchat'; $('#chatcol').append(h);
+    h.onmousedown = (e) => {
+      e.preventDefault(); const x0 = e.clientX, w0 = $('#chatcol').offsetWidth, max = $('#main').offsetWidth - 240; let v = w0;
+      document.body.classList.add('resizing');
+      const mv = (ev) => { v = Math.round(Math.max(300, Math.min(max, w0 - (ev.clientX - x0)))); $('#main').style.setProperty('--cw', v + 'px'); };
+      const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); document.body.classList.remove('resizing'); store.set('callChatW', v); };
+      addEventListener('mousemove', mv); addEventListener('mouseup', up);
+    };
+  }
   const W = Object.assign({ side: 268, members: 264 }, store.get('widths', {})); // Discord's own defaults
   const applyW = () => { const a = $('#app'); a.style.setProperty('--sw', W.side + 'px'); a.style.setProperty('--mw', W.members + 'px'); };
   applyW();
