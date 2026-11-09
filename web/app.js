@@ -2840,8 +2840,12 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
         const lab = (TOOL_LABEL[name] || (() => name.replace(/_/g, ' ')))(b.input || {});
         // the same step again right after itself stacks into one line with a count
         const last = $('#clog').lastElementChild, st = last?.__step;
-        if (st && st.lab === lab && !st.bad) { st.n++; st.left++; last.className = 'cmsg tool run'; last.querySelector('span').textContent = `${lab} ×${st.n}…`; CHIPS.set(b.id, { chip: last, lab }); }
-        else { const chip = clAdd('tool run', `${I.spark}<span>${esc(lab)}…</span>`); chip.__step = { lab, n: 1, left: 1, bad: false }; CHIPS.set(b.id, { chip, lab }); }
+        if (st && st.tool === name && !st.bad) {
+          st.n++; st.left++; if (!st.labs.includes(lab)) st.labs.push(lab);
+          const verb = lab.split(' ')[0], same = st.labs.every((l) => l.split(' ')[0] === verb);
+          st.lab = st.labs.length === 1 ? lab : same ? verb + ' ' + st.labs.map((l) => l.slice(verb.length + 1)).join(', ') : st.labs.join(', ');
+          last.className = 'cmsg tool run'; last.querySelector('span').textContent = `${st.lab} ×${st.n}…`; CHIPS.set(b.id, { chip: last });
+        } else { const chip = clAdd('tool run', `${I.spark}<span>${esc(lab)}…</span>`); chip.__step = { tool: name, lab, labs: [lab], n: 1, left: 1, bad: false }; CHIPS.set(b.id, { chip }); }
         CL.cur = null; $('#cstat').textContent = 'Working…';
         if (name === 'send_message' && b.input?.channel_id === S.cid) setTimeout(scrollBottom, 600);
       }
@@ -2855,7 +2859,7 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
         st.bad = bad;
         const cnt = st.n > 1 ? ` ×${st.n}` : '';
         c.chip.classList.remove('run'); c.chip.classList.add(bad ? 'bad' : 'ok');
-        c.chip.querySelector('span').textContent = c.lab + cnt + (bad ? (/did not approve/.test(txt) ? ' — not done (denied)' : ' — failed') : ' ✓');
+        c.chip.querySelector('span').textContent = st.lab + cnt + (bad ? (/did not approve/.test(txt) ? ' — not done (denied)' : ' — failed') : ' ✓');
         if (bad && !/did not approve/.test(txt)) c.chip.title = txt.replace(/^Error:\s*/, '');
       }
     } else if (d.type === 'result') {
