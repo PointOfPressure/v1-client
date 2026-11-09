@@ -1185,8 +1185,10 @@
       if (c.type === 10) return `<div class="markup">${md(c.content || '', {})}</div>`;
       if (c.type === 17) return `<div class="cbox" style="${c.accent_color != null ? `--ec:#${c.accent_color.toString(16).padStart(6, '0')}` : ''}">${(c.components || []).map(one).join('')}</div>`;
       if (c.type === 9) return `<div class="csec">${(c.components || []).map(one).join('')}${c.accessory ? one(c.accessory) : ''}</div>`;
-      if (c.type === 11) return `<img class="cthumb" src="${esc(c.media?.url || '')}" alt="">`;
-      if (c.type === 12) return `<div class="atts">${(c.items || []).map((x) => `<img src="${esc(x.media?.url || '')}" alt="" loading="lazy">`).join('')}</div>`;
+      if (c.type === 11) return `<img class="cthumb" src="${esc(c.media?.proxy_url || c.media?.url || '')}" alt="">`;
+      // media gallery: Discord's proxy copy (bots' own CDNs often refuse other clients), shown like an attachment
+      if (c.type === 12) return `<div class="atts">${(c.items || []).map((x) => { const md2 = x.media || {}, name = (md2.url || '').split('?')[0].split('/').pop() || 'image';
+        return attHTML({ url: md2.url, proxy: md2.proxy_url, type: md2.content_type || (/\.gif$/i.test(name) ? 'image/gif' : /\.(mp4|webm|mov)$/i.test(name) ? 'video/mp4' : 'image/png'), w: md2.width, h: md2.height, name }); }).join('')}</div>`;
       if (c.type === 14) return '<hr class="csep">';
       return '';
     };
