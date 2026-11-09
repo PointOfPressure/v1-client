@@ -104,14 +104,17 @@ img { -webkit-user-drag: none; }
 .av { position: relative; flex: none; width: 32px; height: 32px; }
 .av > img { width: 100%; height: 100%; border-radius: 50%; display: block; }
 /* Discord's status dot: the avatar gets a transparent cutout, the dot sits in it with its own shape */
-.av.st > img:first-child { -webkit-mask: radial-gradient(circle at var(--sc) var(--sc), transparent var(--sr), #000 calc(var(--sr) + .5px)); mask: radial-gradient(circle at var(--sc) var(--sc), transparent var(--sr), #000 calc(var(--sr) + .5px)); }
-.av > i, .pav > i { --scol: #80848e; --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.5' cy='.5' r='.25' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
-.av > i { position: absolute; left: var(--sp); top: var(--sp); width: var(--ss); height: var(--ss); background: var(--scol); -webkit-mask: var(--sm) 0 0 / 100% 100% no-repeat; mask: var(--sm) 0 0 / 100% 100% no-repeat;
-  --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.5' cy='.5' r='.25' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
-.av > i.online, .pav > i.online { --scol: var(--good); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Ccircle cx='.5' cy='.5' r='.5'/%3E%3C/svg%3E"); }
-.av > i.idle, .pav > i.idle { --scol: var(--idle); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Ccircle cx='.25' cy='.25' r='.375' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
-.av > i.dnd, .pav > i.dnd { --scol: var(--dnd); --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Crect x='.125' y='.375' width='.75' height='.25' rx='.125' ry='.125' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
-.av > i.streaming, .pav > i.streaming { --scol: #593695; --sm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Cmask id='m'%3E%3Ccircle cx='.5' cy='.5' r='.5' fill='white'/%3E%3Cpolygon points='0.35,0.25 0.78301275,0.5 0.35,0.75' fill='black'/%3E%3C/mask%3E%3Crect width='1' height='1' mask='url(%23m)'/%3E%3C/svg%3E"); }
+.av > i, .pav > i { --scol: #80848e; color: var(--scol); }
+.av > i { position: absolute; left: var(--sp); top: var(--sp); width: var(--ss); height: var(--ss); border-radius: 50%; background: var(--ring, #000); box-shadow: 0 0 0 calc(var(--sr) - var(--ss) / 2) var(--ring, #000); }
+.av > i svg, .pav > i svg { display: block; width: 100%; height: 100%; overflow: visible; fill: currentColor; }
+.av > i svg .h, .pav > i svg .h { fill: var(--ring, #000); }
+.av > i.online, .pav > i.online { --scol: var(--good); }
+.av > i.idle, .pav > i.idle { --scol: var(--idle); }
+.av > i.dnd, .pav > i.dnd { --scol: var(--dnd); }
+.av > i.streaming, .pav > i.streaming { --scol: #593695; }
+.prof .pav > i svg { position: absolute; inset: 6px; width: auto; height: auto; }
+.prof .pav > i { --ring: var(--menu); }
+.fprof .pav > i svg { inset: 8px; }
 .av.talk::before { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--good); }
 
 #dockpanel { position: absolute; left: 8px; bottom: 8px; width: calc(var(--sw, 268px) + 56px); z-index: 6; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -359,7 +362,6 @@ body.no-mav .mention .mav { display: none; }
 .prof .pav { cursor: pointer; } .prof .pname[data-pa] { cursor: pointer; } .prof .pname[data-pa]:hover { text-decoration: underline; }
 /* Discord 80px geometry: dot 16, cutout ring 6, inset 4 (the ring is the card colour, like the avatar border) */
 .prof .pav > i { position: absolute; left: 60px; top: 60px; width: 28px; height: 28px; border-radius: 50%; background: var(--menu); z-index: 1; }
-.prof .pav > i::after { content: ''; position: absolute; inset: 6px; background: var(--scol); -webkit-mask: var(--sm) 0 0 / 100% 100% no-repeat; mask: var(--sm) 0 0 / 100% 100% no-repeat; }
 .prof .pbody { padding: 8px 16px 16px; display: grid; gap: 10px; }
 .prof .pname { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .prof .puser { font-size: 14px; font-weight: 500; }
@@ -488,7 +490,6 @@ kbd { font: 600 13px var(--font); background: var(--raise); border: 1px solid va
 .poll .pfoot { font-size: 13px; font-weight: 500; }
 /* avatar decorations */
 .av .deco { position: absolute; left: -10%; top: -10%; width: 120% !important; height: 120% !important; border-radius: 0 !important; pointer-events: none; }
-.av > i { z-index: 1; }
 .msg > .pdeco { position: absolute; left: 12px; top: 0; width: 48px; height: 48px; pointer-events: none; }
 .msg.hasreply > .pdeco { top: 22px; }
 .prof .pav .deco { position: absolute; left: 0; top: 0; width: 92px; height: 92px; border: 0; border-radius: 0; pointer-events: none; transform: scale(1.2); }
@@ -1160,7 +1161,6 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .fprof .pav { margin: -76px 0 0 16px; width: 132px; height: 132px; cursor: default; }
 .fprof .pav img { width: 132px; height: 132px; }
 .fprof .pav > i { left: 86px; top: 86px; width: 40px; height: 40px; }
-.fprof .pav > i::after { inset: 8px; }
 .fprof .pbubble { left: 160px; top: 10px; right: 140px; }
 .fprof .fmsg { position: absolute; right: 16px; top: 16px; display: flex; align-items: center; gap: 6px; height: 32px; }
 .fprof .fmsg svg { width: 16px; height: 16px; }
@@ -1182,3 +1182,9 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 #ahead span { flex: 1; }
 #ahead button { color: #fff; font-weight: 700; font-size: 14px; }
 #ahead button:hover { text-decoration: underline; }
+/* the ring round the status dot is the colour behind the avatar, like Discord's cutout */
+body { --ring: var(--side); }
+.ch:hover, .mem:hover, .mem.on, .meid:hover { --ring: color-mix(in srgb, rgb(151, 151, 159) 12%, var(--side)); }
+.ch.on { --ring: color-mix(in srgb, rgb(151, 151, 159) 20%, var(--side)); }
+#log, .modal, .qs { --ring: var(--chat); }
+.prof, .menu, #pop { --ring: var(--menu); }

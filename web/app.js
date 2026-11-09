@@ -362,7 +362,10 @@
     const c = size - st / 2 - off;
     return `width:${size}px;height:${size}px;--sp:${size - st - off}px;--ss:${st}px;--sc:${c}px;--sr:${st / 2 + sk}px`;
   };
-  const avatarHTML = (u, status, size = 32) => `<span class="av${status ? ' st' : ''}" style="${avStyle(size, status)}"><img src="${esc(px(u.avatar, size))}"${anim(u.avatar, u.avatarAnim, size)} alt="" loading="lazy" decoding="async">${u.deco ? `<img class="deco" src="${esc(px(u.deco, size * 1.2))}"${anim(u.deco, u.decoAnim, size * 1.2)} alt="" loading="lazy" decoding="async">` : ''}${status ? `<i class="${status}"></i>` : ''}</span>`;
+  // Discord's dot shapes drawn flat: the dot plus its "hole" painted in the ring colour (CSS masks made WebKit's memory climb)
+  const DOTHOLE = { idle: '<circle cx="5" cy="5" r="7.5"/>', dnd: '<rect x="2.5" y="7.5" width="15" height="5" rx="2.5"/>', offline: '<circle cx="10" cy="10" r="5"/>', streaming: '<path d="M7 5l8.66 5L7 15z"/>' };
+  const dotSVG = (st) => `<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="10"/>${DOTHOLE[st] ? `<g class="h">${DOTHOLE[st]}</g>` : ''}</svg>`;
+  const avatarHTML = (u, status, size = 32) => `<span class="av${status ? ' st' : ''}" style="${avStyle(size, status)}"><img src="${esc(px(u.avatar, size))}"${anim(u.avatar, u.avatarAnim, size)} alt="" loading="lazy" decoding="async">${u.deco ? `<img class="deco" src="${esc(px(u.deco, size * 1.2))}"${anim(u.deco, u.decoAnim, size * 1.2)} alt="" loading="lazy" decoding="async">` : ''}${status ? `<i class="${status}">${dotSVG(status)}</i>` : ''}</span>`;
   const statusText = (s) => ({ online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' }[s] || 'Offline');
 
   // ------------------------------------------------------------------ rail
@@ -866,7 +869,7 @@
     const actTxt = p.activity ? `${ACTVERB[p.activity.type] || ''} <b>${esc(p.activity.name)}</b>` : '';
     const html = `<div class="prof">
       <div class="ban" style="${ban}"><button class="pmore" data-pa="more" title="More">${I.dots}</button></div>
-      <div class="phead"><div class="pav" data-pa="full" title="View Full Profile"><img src="${esc(px(p.avatar, 80))}"${anim(p.avatar, p.avatarAnim, 80)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 96))}"${anim(p.deco, p.decoAnim, 96)} alt="">` : ''}<i class="${p.status}"></i></div>
+      <div class="phead"><div class="pav" data-pa="full" title="View Full Profile"><img src="${esc(px(p.avatar, 80))}"${anim(p.avatar, p.avatarAnim, 80)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 96))}"${anim(p.deco, p.decoAnim, 96)} alt="">` : ''}<i class="${p.status}">${dotSVG(p.status)}</i></div>
         ${p.custom ? `<div class="pbubble">${esc(p.custom)}</div>` : ''}</div>
       <div class="pbody">
         <div class="pname" data-pa="full">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
@@ -893,7 +896,7 @@
         mutual: () => p.mutual.map((x) => `<button class="fmut" data-g="${x.id}">${x.icon ? `<img src="${esc(x.icon)}" alt="">` : `<span class="fmi">${esc(x.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 3))}</span>`}<span><b>${esc(x.name)}</b>${x.nick ? `<small>${esc(x.nick)}</small>` : ''}</span></button>`).join(''),
       };
       box.innerHTML = `<div class="fprof prof"><div class="ban" style="${ban}"></div>
-        <div class="phead"><div class="pav"><img src="${esc(px(p.avatar, 128))}"${anim(p.avatar, p.avatarAnim, 128)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 160))}"${anim(p.deco, p.decoAnim, 160)} alt="">` : ''}<i class="${p.status}"></i></div>
+        <div class="phead"><div class="pav"><img src="${esc(px(p.avatar, 128))}"${anim(p.avatar, p.avatarAnim, 128)} alt="">${p.deco ? `<img class="deco" src="${esc(px(p.deco, 160))}"${anim(p.deco, p.decoAnim, 160)} alt="">` : ''}<i class="${p.status}">${dotSVG(p.status)}</i></div>
           ${p.custom ? `<div class="pbubble">${esc(p.custom)}</div>` : ''}
           ${p.bot || p.id === S.me.id ? '' : `<button class="btn fmsg" data-f="dm">${I.dm}Message</button>`}</div>
         <div class="pbody"><div class="pname">${esc(nickOf(p) || p.name)}${p.bot ? ' <span class="tag">APP</span>' : ''}</div>
