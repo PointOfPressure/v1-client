@@ -44,10 +44,12 @@ function idxInit() {
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS client_fts USING fts5(content, id UNINDEXED, guild UNINDEXED, channel UNINDEXED, author UNINDEXED, name UNINDEXED, ts UNINDEXED, tokenize='unicode61 remove_diacritics 2');
     CREATE TABLE IF NOT EXISTS client_idx (channel TEXT PRIMARY KEY, oldest TEXT, done INTEGER DEFAULT 0, n INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS client_ids (id TEXT PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS client_threads (id TEXT PRIMARY KEY, parent TEXT, guild TEXT, name TEXT);
     CREATE TABLE IF NOT EXISTS client_names (user TEXT, kind TEXT, value TEXT, at INTEGER, PRIMARY KEY (user, kind, value));`);
   IDX = { ins: db.prepare('INSERT INTO client_fts (content, id, guild, channel, author, name, ts) VALUES (?, ?, ?, ?, ?, ?, ?)'), seen: db.prepare('INSERT OR IGNORE INTO client_ids (id) VALUES (?)'),
     state: db.prepare('SELECT oldest, done, n FROM client_idx WHERE channel = ?'), save: db.prepare('INSERT INTO client_idx (channel, oldest, done, n) VALUES (?, ?, ?, ?) ON CONFLICT(channel) DO UPDATE SET oldest = excluded.oldest, done = excluded.done, n = excluded.n'),
-    name: db.prepare('INSERT OR IGNORE INTO client_names (user, kind, value, at) VALUES (?, ?, ?, ?)') };
+    name: db.prepare('INSERT OR IGNORE INTO client_names (user, kind, value, at) VALUES (?, ?, ?, ?)'),
+    thr: db.prepare('INSERT INTO client_threads (id, parent, guild, name) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name'), thrGet: db.prepare('SELECT parent, name FROM client_threads WHERE id = ?') };
   return IDX;
 }
 function idxMsg(m) {
@@ -74,7 +76,49 @@ async function backfillStep() { // one request at a time, ~3 per second: well in
         return; // one fetch per step
       }
     }
+    // then threads, active and archived (found by scanThreads), the same way
+    if (!thrScanned) { thrScanned = true; await scanThreads(); return; }
+    for (const t of THR.values()) {
+      const st = IDX.state.get(t.id) || { oldest: null, done: 0, n: 0 };
+      if (st.done) { THR.delete(t.id); continue; }
+      const got = await t.messages.fetch({ limit: 100, ...(st.oldest ? { before: st.oldest } : {}), cache: false }).catch(() => null);
+      if (!got) { IDX.save.run(t.id, st.oldest, 1, st.n); THR.delete(t.id); return; }
+      let n = st.n, oldest = st.oldest;
+      for (const m of got.values()) { if (idxMsg(m)) n++; if (!oldest || BigInt(m.id) < BigInt(oldest)) oldest = m.id; }
+      IDX.save.run(t.id, oldest, got.size < 100 ? 1 : 0, n);
+      return;
+    }
   } finally { backfillBusy = false; }
+}
+// every thread V1 can read: active ones plus each channel's archived ones (public, and private where it manages threads)
+const THR = new Map(); let thrScanned = false;
+const nap = (ms) => new Promise((ok) => setTimeout(ok, ms));
+function noteThread(t) { if (!t?.parentId) return; IDX?.thr.run(t.id, t.parentId, t.guildId, t.name); THR.set(t.id, t); }
+async function scanThreads() {
+  for (const g of client.guilds.cache.values()) {
+    const me = g.members.me;
+    const a = await g.channels.fetchActiveThreads().catch(() => null); a?.threads.forEach(noteThread); await nap(350);
+    for (const c of [...g.channels.cache.values()]) {
+      const pm = c.threads && c.viewable && c.permissionsFor(me);
+      if (!pm?.has(PermissionFlagsBits.ReadMessageHistory)) continue;
+      for (const type of pm.has(PermissionFlagsBits.ManageThreads) ? ['public', 'private'] : ['public']) {
+        let before;
+        for (let i = 0; i < 100; i++) {
+          const r = await c.threads.fetchArchived({ type, limit: 100, ...(before ? { before } : {}) }).catch(() => null); await nap(350);
+          if (!r?.threads.size) break;
+          r.threads.forEach(noteThread);
+          if (!r.hasMore) break;
+          before = [...r.threads.values()].reduce((x, y) => ((y.archiveTimestamp ?? 0) < (x.archiveTimestamp ?? 0) ? y : x));
+        }
+      }
+    }
+  }
+}
+// a thread that isn't cached any more (archived): its parent decides who can see it
+function chanOrThread(id) {
+  const ch = client.channels.cache.get(id); if (ch) return { ch, name: ch.name };
+  const t = IDX?.thrGet.get(id); const parent = t && client.channels.cache.get(t.parent);
+  return parent ? { ch: parent, name: t.name } : null;
 }
 function idxStatus() {
   if (!idxInit()) return { ready: false };
@@ -768,9 +812,9 @@ async function route(req, res) {
     let rows0 = []; try { rows0 = searchIndex(gid, q); } catch { /* bad FTS syntax: fall back */ }
     if (rows0.length || /\b(from|in|has|before|after):/i.test(q)) {
       const g0 = client.guilds.cache.get(gid);
-      return reply(res, 200, { index: idxStatus(), results: rows0.filter((r) => { const ch = client.channels.cache.get(r.channel); return ch && canSee(ch); }).map((r) => {
+      return reply(res, 200, { index: idxStatus(), results: rows0.filter((r) => { const c = chanOrThread(r.channel); return c && canSee(c.ch); }).map((r) => {
         const u = client.users.cache.get(r.author);
-        return { id: r.id, channelId: r.channel, channel: client.channels.cache.get(r.channel)?.name, content: r.content, ts: Number(r.ts), author: u ? who(u, g0) : { id: r.author, name: r.name, avatar: null } };
+        return { id: r.id, channelId: r.channel, channel: chanOrThread(r.channel)?.name, content: r.content, ts: Number(r.ts), author: u ? who(u, g0) : { id: r.author, name: r.name, avatar: null } };
       }) });
     }
     const rows = hooks.db.prepare("SELECT id, channel, author, name, content, ts FROM seen WHERE guild = ? AND content LIKE ? ESCAPE '\\' ORDER BY ts DESC LIMIT 50")
@@ -1149,7 +1193,7 @@ function setup(onAll, c, h) {
   client = c; hooks = h;
   hookEvents(onAll);
   alertHooks(onAll);
-  onAll(Events.MessageCreate, (m) => { try { idxMsg(m); } catch { /* */ } });
+  onAll(Events.MessageCreate, (m) => { try { if (idxMsg(m) && m.channel?.isThread?.() && m.channel.parentId) IDX.thr.run(m.channel.id, m.channel.parentId, m.guildId, m.channel.name); } catch { /* */ } });
   onAll(Events.ClientReady, () => {
     setInterval(() => backfillStep().catch(() => {}), 350).unref();
     setInterval(() => schedTick().catch(() => {}), 10000).unref();
