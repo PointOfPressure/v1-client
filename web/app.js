@@ -119,7 +119,7 @@
 
   const S = {
     me: null, home: null, guilds: new Map(), gid: null, cid: null,
-    msgs: new Map(), more: new Map(), loading: false, lru: [],
+    msgs: new Map(), more: new Map(), ahead: new Set(), loading: false, lru: [],
     typing: new Map(), speaking: new Set(), voice: null, joining: null, wsOk: false,
     reply: null, ping: true, files: [], edit: null, silent: false,
     unread: new Map(), members: new Map(), dms: [], pinnedDms: new Set(store.get('pinnedDms', [])),
@@ -1060,19 +1060,19 @@
     ta.disabled = c && !c.send;
     ta.placeholder = c && !c.send ? 'V1 cannot send messages here' : c?.type === CH.DM ? `Message @${c.name}` : `Message ${isVoice(c) ? '' : '#'}${c?.name ?? ''}`;
     S.lru = [cid, ...S.lru.filter((x) => x !== cid)];
-    for (const old of S.lru.splice(80)) { S.msgs.delete(old); S.more.delete(old); } // keep memory flat
+    for (const old of S.lru.splice(80)) { S.msgs.delete(old); S.more.delete(old); S.ahead.delete(old); } // keep memory flat
     if (!S.msgs.has(cid)) {
       $('#log').innerHTML = '<div class="empty">Loading</div>';
       try { await fetchChan(cid); }
       catch (e) { if (S.cid === cid) $('#log').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
     }
     if (S.cid !== cid) return;
-    renderLog(); scrollBottom(); markRead(cid);
+    renderLog(); renderAhead(); if (!S.ahead.has(cid)) { scrollBottom(); markRead(cid); }
     if (S.cid === cid && ta.value === '' ) loadDraft(cid);
     if (!ta.disabled) ta.focus();
   }
   async function resync() {
-    try { const r = await api('GET', `/channels/${S.cid}/messages?limit=50`); const keepDeleted = (S.msgs.get(S.cid) || []).filter((m) => m.deleted); S.msgs.set(S.cid, mergeDeleted(r.messages, keepDeleted)); S.more.set(S.cid, r.messages.length === 50); renderLog(); scrollBottom(); } catch { /* next time */ }
+    try { S.ahead.delete(S.cid); renderAhead(); const r = await api('GET', `/channels/${S.cid}/messages?limit=50`); const keepDeleted = (S.msgs.get(S.cid) || []).filter((m) => m.deleted); S.msgs.set(S.cid, mergeDeleted(r.messages, keepDeleted)); S.more.set(S.cid, r.messages.length === 50); renderLog(); scrollBottom(); } catch { /* next time */ }
   }
   const mergeDeleted = (list, del) => [...list, ...del].sort((a, b) => (BigInt(a.id) > BigInt(b.id) ? 1 : -1));
   function renderHead() {
@@ -1360,7 +1360,7 @@
   function dropMsgEl(el) { if (!el) return; const d = el.previousElementSibling, n = el.nextElementSibling; el.remove(); if (d?.classList.contains('daysep') && (!n || n.classList.contains('daysep'))) d.remove(); }
   function addMsg(m) {
     S.typing.get(m.channelId)?.delete(m.author.id); // typing stops when they post
-    const list = S.msgs.get(m.channelId);
+    const list = S.ahead.has(m.channelId) ? null : S.msgs.get(m.channelId); // viewing older messages: it arrives when you jump to present
     let idx = -1, replaced = false;
     if (list) {
       const pend = m.nonce ? list.findIndex((x) => x.pending && x.nonce === m.nonce) : -1;
@@ -1477,7 +1477,7 @@
   }
   $('#scroller').addEventListener('scroll', () => {
     pinned = nearBottom();
-    loadOlder();
+    loadOlder(); loadNewer();
   }, { passive: true });
 
   // audio players
@@ -1626,8 +1626,33 @@
   function jumpTo(id, cid = S.cid) {
     if (cid !== S.cid) { const g = guildOf(cid); if (g && g.id !== S.gid) { S.gid = g.id; renderRail(); renderSideHead(); loadMembers(g.id); } openChannel(cid).then(() => jumpTo(id, cid)); return; }
     const t = $(`.msg[data-id="${id}"]`);
-    if (t) { t.scrollIntoView({ block: 'center' }); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); }
-    else toast('That message is further back');
+    if (t) { t.scrollIntoView({ block: 'center' }); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); return; }
+    // not loaded: show the messages around it, like Discord, with "Jump to present" until you're back at the latest
+    api('GET', `/channels/${cid}/messages?limit=100&around=${id}`).then((r) => {
+      if (S.cid !== cid || !r.messages.some((m) => m.id === id)) { toast("Couldn't find that message", true); return; }
+      S.msgs.set(cid, r.messages); S.more.set(cid, true); S.ahead.add(cid);
+      renderLog(); renderAhead(); jumpTo(id, cid);
+    }, (x) => toast(x.message, true));
+  }
+  function renderAhead() {
+    let b = $('#ahead');
+    if (!S.ahead.has(S.cid)) { b?.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'ahead'; b.innerHTML = "<span>You're viewing older messages</span><button>Jump to present</button>"; b.querySelector('button').onclick = jumpPresent; $('#dock').prepend(b); }
+  }
+  function jumpPresent() { const cid = S.cid; S.ahead.delete(cid); S.msgs.delete(cid); S.more.delete(cid); renderAhead(); openChannel(cid); }
+  async function loadNewer() { // scrolled to the bottom of an older window: bring in the next 100
+    const cid = S.cid, list = S.msgs.get(cid);
+    if (S.loading || !S.ahead.has(cid) || !list?.length || !nearBottom()) return;
+    S.loading = true;
+    try {
+      const r = await api('GET', `/channels/${cid}/messages?limit=100&after=${list.at(-1).id}`);
+      if (S.cid !== cid) return;
+      const fresh = r.messages.filter((m) => !list.some((x) => x.id === m.id));
+      let html = ''; for (const m of fresh) { html += msgHTML(m, list.at(-1)); list.push(m); }
+      const t = document.createElement('div'); t.innerHTML = html; twe(t); hydrate(t); $('#log').append(...t.childNodes);
+      if (r.messages.length < 100) { S.ahead.delete(cid); renderAhead(); markRead(cid); }
+      if (list.length > 600) { list.splice(0, list.length - 400); S.more.set(cid, true); const sc = $('#scroller'), before = sc.scrollHeight - sc.scrollTop; renderLog(); sc.scrollTop = sc.scrollHeight - before; }
+    } catch (e) { toast(e.message, true); } finally { S.loading = false; }
   }
   function react(m, key, add) {
     const r = m.reactions.find((x) => x.key === key); // show it at once; the server sends the real numbers back
@@ -1809,6 +1834,7 @@
     closeAc();
 
     if (!text && !S.files.length && !S.opts.embedSend) return;
+    if (S.ahead.has(S.cid)) jumpPresent();
     if (text.length > 2000) { toast(`Too long: ${text.length}/2000`, true); return; }
     const files = S.files.slice(), replyTo = S.reply?.id, ping = S.ping, cid = S.cid, silent = S.silent;
     ta.value = ''; autosize(); cancelReply(); clearFiles(); S.lastTyping = 0; delete DRAFTS[cid]; store.set('drafts', DRAFTS);

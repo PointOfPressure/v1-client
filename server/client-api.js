@@ -838,7 +838,7 @@ async function route(req, res) {
     const ch = await textChannel(p[2]);
     if (M === 'GET' && p[3] === 'messages' && !p[4]) {
       const opts = { limit: Math.min(Number(url.searchParams.get('limit')) || 50, 100) };
-      if (url.searchParams.get('before')) opts.before = url.searchParams.get('before');
+      for (const k of ['before', 'after', 'around']) if (url.searchParams.get(k)) { opts[k] = url.searchParams.get(k); break; }
       const got = await ch.messages.fetch(opts);
       return reply(res, 200, { messages: [...got.values()].reverse().map(ser) });
     }

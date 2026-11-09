@@ -1176,3 +1176,9 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .fmut img, .fmut .fmi { width: 40px; height: 40px; border-radius: 12px; flex: none; }
 .fmut .fmi { display: grid; place-items: center; background: var(--raise); font-size: 13px; font-weight: 600; }
 .fmut span { display: flex; flex-direction: column; } .fmut b { font-weight: 600; font-size: 15px; } .fmut small { font-size: 13px; }
+
+/* viewing an older window of a channel (jumped to a search result or reply) */
+#ahead { display: flex; align-items: center; gap: 8px; margin: 0 8px -8px; padding: 6px 12px 14px; border-radius: 8px 8px 0 0; background: #5865f2; color: #fff; font-size: 14px; font-weight: 500; }
+#ahead span { flex: 1; }
+#ahead button { color: #fff; font-weight: 700; font-size: 14px; }
+#ahead button:hover { text-decoration: underline; }
