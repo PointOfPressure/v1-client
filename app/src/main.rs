@@ -56,6 +56,31 @@ async fn yt_stream(url: String) -> Result<String, String> {
     s.lines().next().filter(|l| l.starts_with("http")).map(|l| l.to_string()).ok_or_else(|| String::from_utf8_lossy(&out.stderr).chars().take(200).collect())
 }
 
+// switch off one of WebKit's feature flags by name (the webkit2gtk crate doesn't wrap the 2.42 feature API).
+// AnimatedImageAsyncDecodingEnabled: decoding GIF/WebP frames on a background thread makes them fall behind and then race to catch up
+fn feature_off(st: &webkit2gtk::Settings, id: &str) {
+    use std::ffi::{c_char, c_void, CStr};
+    use webkit2gtk::glib::object::ObjectType;
+    extern "C" {
+        fn webkit_settings_get_all_features() -> *mut c_void;
+        fn webkit_feature_list_get_length(l: *mut c_void) -> usize;
+        fn webkit_feature_list_get(l: *mut c_void, i: usize) -> *mut c_void;
+        fn webkit_feature_list_unref(l: *mut c_void);
+        fn webkit_feature_get_identifier(f: *mut c_void) -> *const c_char;
+        fn webkit_settings_set_feature_enabled(s: *mut c_void, f: *mut c_void, on: i32);
+    }
+    unsafe {
+        let l = webkit_settings_get_all_features();
+        if l.is_null() { return; }
+        for i in 0..webkit_feature_list_get_length(l) {
+            let f = webkit_feature_list_get(l, i);
+            let n = webkit_feature_get_identifier(f);
+            if !n.is_null() && CStr::from_ptr(n).to_bytes() == id.as_bytes() { webkit_settings_set_feature_enabled(st.as_ptr() as *mut c_void, f, 0); }
+        }
+        webkit_feature_list_unref(l);
+    }
+}
+
 #[tauri::command]
 fn play_external(url: String) {
     if url.starts_with("https://") { let _ = std::process::Command::new("celluloid").arg(url).spawn(); }
@@ -219,7 +244,7 @@ fn main() {
             if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
                 let _ = w.with_webview(|wv| {
                     use webkit2gtk::{SettingsExt, WebViewExt};
-                    if let Some(st) = WebViewExt::settings(&wv.inner()) { st.set_enable_smooth_scrolling(false); }
+                    if let Some(st) = WebViewExt::settings(&wv.inner()) { st.set_enable_smooth_scrolling(false); feature_off(&st, "AnimatedImageAsyncDecodingEnabled"); }
                     // V1 restarting = connection refused: show a black "Reconnecting" page that retries, not WebKit's white error page
                     wv.inner().connect_load_failed(|v, _ev, uri, err| {
                         if err.matches(webkit2gtk::PolicyError::FrameLoadInterruptedByPolicyChange) || err.matches(webkit2gtk::NetworkError::Cancelled) { return false; } // links we open outside

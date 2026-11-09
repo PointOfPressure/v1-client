@@ -1161,6 +1161,7 @@ body.resizing #chans, body.resizing #members { overflow: hidden; }
 .fprof .pav { margin: -76px 0 0 16px; width: 132px; height: 132px; cursor: default; }
 .fprof .pav img { width: 132px; height: 132px; }
 .fprof .pav > i { left: 86px; top: 86px; width: 40px; height: 40px; }
+.fprof .pav .deco { width: 132px; height: 132px; }
 .fprof .pbubble { left: 160px; top: 10px; right: 140px; }
 .fprof .fmsg { position: absolute; right: 16px; top: 16px; display: flex; align-items: center; gap: 6px; height: 32px; }
 .fprof .fmsg svg { width: 16px; height: 16px; }
