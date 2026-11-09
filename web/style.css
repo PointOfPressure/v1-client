@@ -496,7 +496,6 @@ kbd { font: 600 13px var(--font); background: var(--raise); border: 1px solid va
 .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 4; }
 .grip.side { right: -3px; }
 .grip.members { left: -3px; }
-.grip:hover, body.resizing .grip { background: var(--accent); opacity: .6; }
 body.resizing { cursor: col-resize; user-select: none; }
 #side, #members { position: relative; }
 .mtext { font-size: 15px; }
@@ -734,7 +733,6 @@ body.tbar #app { height: calc(100vh - 32px); margin-top: 32px; }
 #app > .grip.side { left: calc(72px + var(--sw, 268px) - 3px); }
 #app > .grip.members { right: calc(var(--mw, 264px) - 3px); }
 #app.nomembers > .grip.members { display: none; }
-#app > .grip:hover, body.resizing #app > .grip { background: var(--accent); opacity: .6; }
 /* server hover card */
 #stip { position: fixed; z-index: 70; transform: translateY(-50%); background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; pointer-events: none; box-shadow: 0 8px 24px #000c; }
 #stip b { font-size: 15px; font-weight: 700; }

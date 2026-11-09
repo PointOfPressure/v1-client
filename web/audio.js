@@ -202,19 +202,22 @@ const NativeVoice = (() => {
   const dev = store.get('devices', {});
   const st = { mode: store.get('mode', 'open'), key: store.get('pttKey', 'Backquote'), muted: false, deaf: false,
     threshold: store.get('threshold', -50), gains: store.get('gains', {}), noise: store.get('noise', true), input: dev.input || null, output: dev.output || null };
-  let active = false, sending = false, level = -100;
+  let active = false, sending = false, level = -100, ready = null, readyOk = null;
+  const settle = () => { readyOk?.(); readyOk = null; };
   const listeners = new Set(), errors = new Set();
   const emit = () => listeners.forEach((f) => f());
   const push = () => invoke('voice_set', { settings: st }).catch((e) => console.warn('voice_set', e));
   push();
   (T?.event?.listen ?? (() => Promise.resolve()))('v1-voice', ({ payload: p }) => {
-    if (p.t === 'state') { const ch = p.sending !== sending; sending = p.sending; level = p.level; if (ch) emit(); }
-    else if (p.t === 'error') errors.forEach((f) => f(p.error));
-    else if (p.t === 'ended') { active = false; sending = false; emit(); }
+    if (p.t === 'state') { settle(); const ch = p.sending !== sending; sending = p.sending; level = p.level; if (ch) emit(); }
+    else if (p.t === 'error') { settle(); errors.forEach((f) => f(p.error)); }
+    else if (p.t === 'ended') { settle(); active = false; sending = false; emit(); }
   });
   return {
     native: true,
-    async join(vcId) { active = true; emit(); await invoke('voice_join', { channelId: vcId }); },
+    async join(vcId) { if (!active) ready = new Promise((ok) => { readyOk = ok; }); active = true; emit(); await invoke('voice_join', { channelId: vcId }); },
+    // resolves once the native audio streams are running (its first level report), so sounds don't land on the device switch
+    whenReady: (ms = 2500) => Promise.race([ready || Promise.resolve(), new Promise((ok) => setTimeout(ok, ms))]),
     leave() { invoke('voice_leave'); active = false; sending = false; emit(); },
     ended() { if (active) invoke('voice_leave'); active = false; sending = false; emit(); },
     onPacket() {}, setHeld() {}, stop() { this.ended(); },

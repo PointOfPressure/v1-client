@@ -135,14 +135,15 @@
   // Discord's own sounds when they're present in sounds/ (fetched locally, not in the repo); tones otherwise
   const SFX_FILE = { message: 'message1', join: 'user_join', leave: 'user_leave', connect: 'user_join', disconnect: 'disconnect', mute: 'mute', unmute: 'unmute', deafen: 'deafen', undeafen: 'undeafen', pttOn: 'ptt_start', pttOff: 'ptt_stop' };
   const SFX_BUF = {};
+  const newCtx = () => { try { return new AudioContext({ sampleRate: 48000 }); } catch { return new AudioContext(); } }; // same rate as the voice engine: no resampling switch on the device
   function loadSfx() {
-    try { actx ??= new AudioContext(); } catch { return; }
+    try { actx ??= newCtx(); } catch { return; }
     for (const f of new Set(Object.values(SFX_FILE))) fetch(`sounds/${f}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => actx.decodeAudioData(b)).then((buf) => { SFX_BUF[f] = buf; }).catch(() => {});
   }
   setTimeout(loadSfx, 2000);
   function sfx(kind) {
     if (SND[kind] === false || !SND.volume) return;
-    try { actx ??= new AudioContext(); } catch { return; }
+    try { actx ??= newCtx(); } catch { return; }
     const buf = SFX_BUF[SFX_FILE[kind]];
     if (buf) { if (actx.state === 'suspended') actx.resume(); const src = actx.createBufferSource(), g = actx.createGain(); g.gain.value = SND.volume; src.buffer = buf; src.connect(g).connect(actx.destination); src.start(); return; }
     const seq = { message: [[880, 0, .09], [1320, .07, .14]], join: [[523, 0, .1], [784, .09, .16]], leave: [[784, 0, .1], [523, .09, .16]],
@@ -2326,7 +2327,7 @@
   function onVoiceState(v, why) {
     const was = S.voice;
     S.voice = v; S.joining = null;
-    if (v && !was) { S.voiceSince = Date.now(); sfx('connect'); }
+    if (v && !was) { S.voiceSince = Date.now(); if (Voice.whenReady) Voice.whenReady().then(() => setTimeout(() => sfx('connect'), 150)); else sfx('connect'); }
     if (!v && was) sfx('disconnect');
     if (!v && S.sharing) { invoke('share_audio', { id: null }); S.sharing = null; }
     if (!v) { if (Voice.active) Voice.ended(); S.speaking.clear(); S.selfSpeaking = false; if (why && why !== 'left' && was) toast('Voice ' + why); }
@@ -2947,7 +2948,8 @@ They are currently looking at ${c ? `${c.type === CH.DM ? 'a DM with ' + c.name 
       // freeze every panel's contents at a fixed width while dragging: only the panel edges move (no text re-layout),
       // so the drag follows the mouse instantly; everything re-flows once on release
       const frozen = [];
-      const freeze = (el, w) => { if (!el || el.hidden) return; frozen.push([el, el.style.cssText]); el.style.width = w + 'px'; el.style.flex = `0 0 ${w}px`; el.style.maxWidth = 'none'; };
+      // flex only for row children: in a column (sidebar header, channel list, members) flex-basis is the height
+      const freeze = (el, w) => { if (!el || el.hidden) return; frozen.push([el, el.style.cssText]); el.style.width = w + 'px'; el.style.maxWidth = 'none'; if (getComputedStyle(el.parentElement).flexDirection.startsWith('row')) el.style.flex = `0 0 ${w}px`; };
       freeze($('#chatcol'), $('#chatcol').offsetWidth); freeze($('#callgrid'), $('#callgrid').offsetWidth);
       for (const id of ['#chans', '#sidehead', '#members']) { const el = $(id); if (el && el.offsetWidth) freeze(el, Math.max(el.offsetWidth, 460)); }
       const mv = (ev) => { const v = Math.round(Math.max(200, Math.min(460, w0 + (ev.clientX - x0) * dir))); if (v !== W[key]) { W[key] = v; applyW(); } };
