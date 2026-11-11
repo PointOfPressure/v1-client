@@ -4,7 +4,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use futures_util::{SinkExt, StreamExt};
@@ -17,9 +17,11 @@ use tokio_tungstenite::tungstenite::Message;
 
 const RATE: u32 = 48_000;
 const FRAME: usize = 960; // 20 ms
-const PRE: usize = 1920 * 2; // 40 ms stereo cushion before a speaker starts
-const MAX: usize = 9600 * 2; // 200 ms ceiling...
-const TRIM: usize = 2880 * 2; // ...trimmed back to 60 ms
+// per-speaker cushion (stereo samples): starts at 60 ms; each hiccup (ran dry, audio back within 400 ms) adds 20 ms up to 200 ms; eases back after 20 s clean
+const PRE0: usize = 2880 * 2;
+const PREMAX: usize = 9600 * 2;
+const STEP: usize = 960 * 2;
+const MAX: usize = 19200 * 2;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -40,7 +42,7 @@ impl Default for Settings {
     }
 }
 
-struct UserBuf { q: VecDeque<f32>, on: bool }
+struct UserBuf { q: VecDeque<f32>, on: bool, pre: usize, dry: Option<Instant>, ok: Instant }
 
 pub struct Shared {
     settings: Mutex<Settings>,
@@ -146,9 +148,11 @@ async fn net(url: String, mut rx: tmpsc::UnboundedReceiver<Message>, sh: Arc<Sha
                 let dec = decoders.entry(uid).or_insert_with(|| opus::Decoder::new(RATE, opus::Channels::Stereo).expect("opus decoder"));
                 let n = match dec.decode_float(&b[9..], &mut pcm, false) { Ok(n) => n, Err(_) => continue };
                 let mut users = sh.users.lock();
-                let u = users.entry(uid).or_insert_with(|| UserBuf { q: VecDeque::with_capacity(MAX), on: false });
+                let u = users.entry(uid).or_insert_with(|| UserBuf { q: VecDeque::with_capacity(MAX), on: false, pre: PRE0, dry: None, ok: Instant::now() });
+                if let Some(t) = u.dry.take() { if t.elapsed() < Duration::from_millis(400) { u.pre = (u.pre + STEP).min(PREMAX); u.ok = Instant::now(); } }
+                else if u.pre > PRE0 && u.ok.elapsed() > Duration::from_secs(20) { u.pre -= STEP; u.ok = Instant::now(); }
                 u.q.extend(&pcm[..n * 2]);
-                if u.q.len() > MAX { let cut = u.q.len() - TRIM; u.q.drain(..cut); }
+                if u.q.len() > u.pre + 7200 * 2 { let cut = u.q.len() - (u.pre + 960 * 2); u.q.drain(..cut); }
             }
             Message::Text(t) => {
                 let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
@@ -175,9 +179,12 @@ async fn net(url: String, mut rx: tmpsc::UnboundedReceiver<Message>, sh: Arc<Sha
 fn audio(sh: Arc<Shared>, tx: tmpsc::UnboundedSender<Message>, stop: Arc<AtomicBool>) -> Result<(), String> {
     let host = cpal::default_host();
     let (want_in, want_out) = { let s = sh.settings.lock(); (s.input.clone(), s.output.clone()) };
-    let pick_in = want_in.and_then(|n| host.input_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(n.as_str())));
+    let pick_in = want_in.clone().and_then(|n| host.input_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(n.as_str())));
     let pick_out = want_out.and_then(|n| host.output_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(n.as_str())));
-    let input = pick_in.or_else(|| host.default_input_device()).ok_or("no microphone")?;
+    // a raw hw: device only takes its own sample format; its plughw: twin converts, and the system default always works
+    let plug_in = want_in.as_deref().and_then(|n| n.strip_prefix("hw:")).and_then(|r| host.input_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(format!("plughw:{r}").as_str())));
+    let mut inputs: Vec<cpal::Device> = pick_in.into_iter().chain(plug_in).chain(host.default_input_device()).collect();
+    if inputs.is_empty() { return Err("no microphone".into()); }
     let output = pick_out.or_else(|| host.default_output_device()).ok_or("no output device")?;
 
     // ---- output: mix every speaker's buffer
@@ -189,11 +196,11 @@ fn audio(sh: Arc<Shared>, tx: tmpsc::UnboundedSender<Message>, stop: Arc<AtomicB
         if deaf { return; }
         let mut users = osh.users.lock();
         for (uid, u) in users.iter_mut() {
-            if !u.on { if u.q.len() >= PRE { u.on = true; } else { continue; } }
+            if !u.on { if u.q.len() >= u.pre { u.on = true; } else { continue; } }
             let g = gains.get(&uid.to_string()).copied().unwrap_or(1.0);
             let n = data.len().min(u.q.len());
             for (d, s) in data[..n].iter_mut().zip(u.q.drain(..n)) { *d += s * g; }
-            if n < data.len() { u.on = false; } // ran dry: build a cushion again
+            if n < data.len() { u.on = false; u.dry = Some(Instant::now()); } // ran dry: build a cushion again
         }
         for d in data.iter_mut() { *d = d.clamp(-1.0, 1.0); }
     };
@@ -204,16 +211,23 @@ fn audio(sh: Arc<Shared>, tx: tmpsc::UnboundedSender<Message>, stop: Arc<AtomicB
 
     // ---- input: hand mono samples to the encoder loop below
     let (mtx, mrx) = mpsc::channel::<Vec<f32>>();
-    let icfg_def = input.default_input_config().map_err(|e| format!("mic: {e}"))?;
     let try_cfg = |ch: u16, buf: cpal::BufferSize| cpal::StreamConfig { channels: ch, sample_rate: cpal::SampleRate(RATE), buffer_size: buf };
     let mut istream = None;
-    for (ch, buf) in [(1, cpal::BufferSize::Fixed(480)), (1, cpal::BufferSize::Default), (icfg_def.channels(), cpal::BufferSize::Default)] {
-        let m = mtx.clone();
-        let cb = move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            let mono: Vec<f32> = if ch == 1 { data.to_vec() } else { data.chunks(ch as usize).map(|c| c.iter().sum::<f32>() / ch as f32).collect() };
-            let _ = m.send(mono);
-        };
-        if let Ok(s) = input.build_input_stream(&try_cfg(ch, buf), cb, err, None) { istream = Some(s); break; }
+    let picked = inputs.first().and_then(|d| d.name().ok());
+    'devs: for input in inputs.drain(..) {
+        let def_ch = input.default_input_config().map(|c| c.channels()).unwrap_or(2);
+        for (ch, buf) in [(1, cpal::BufferSize::Fixed(480)), (1, cpal::BufferSize::Default), (def_ch, cpal::BufferSize::Default)] {
+            let m = mtx.clone();
+            let cb = move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                let mono: Vec<f32> = if ch == 1 { data.to_vec() } else { data.chunks(ch as usize).map(|c| c.iter().sum::<f32>() / ch as f32).collect() };
+                let _ = m.send(mono);
+            };
+            if let Ok(s) = input.build_input_stream(&try_cfg(ch, buf), cb, err, None) {
+                let got = input.name().ok();
+                if got != picked { sh.event(json!({ "t": "error", "error": format!("Couldn't open {}, using {} instead", picked.clone().unwrap_or_default(), got.unwrap_or_default()) })); }
+                istream = Some(s); break 'devs;
+            }
+        }
     }
     let istream = istream.ok_or("could not open the microphone at 48 kHz")?;
     ostream.play().map_err(|e| e.to_string())?;
