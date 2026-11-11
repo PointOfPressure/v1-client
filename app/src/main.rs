@@ -245,6 +245,8 @@ fn main() {
                 let _ = w.with_webview(|wv| {
                     use webkit2gtk::{SettingsExt, WebViewExt};
                     if let Some(st) = WebViewExt::settings(&wv.inner()) { st.set_enable_smooth_scrolling(false); feature_off(&st, "AnimatedImageAsyncDecodingEnabled"); }
+                    // smallest in-memory cache (no back/forward page cache, decoded images freed sooner): this box has 3 GB
+                    if let Some(ctx) = WebViewExt::context(&wv.inner()) { use webkit2gtk::WebContextExt; ctx.set_cache_model(webkit2gtk::CacheModel::DocumentViewer); }
                     // V1 restarting = connection refused: show a black "Reconnecting" page that retries, not WebKit's white error page
                     wv.inner().connect_load_failed(|v, _ev, uri, err| {
                         if err.matches(webkit2gtk::PolicyError::FrameLoadInterruptedByPolicyChange) || err.matches(webkit2gtk::NetworkError::Cancelled) { return false; } // links we open outside

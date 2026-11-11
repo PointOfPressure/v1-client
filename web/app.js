@@ -1291,7 +1291,9 @@
     const fit = (w, h) => { if (!w || !h) return ''; const s = Math.min(1, 400 / w, 320 / h); return ` width="${Math.round(w * s)}" height="${Math.round(h * s)}"`; };
     if (t === 'image/gif' || /\.gif$/i.test(a.name || '')) return `<span class="gifm" data-gurl="${esc(a.url)}" data-gsrc="${esc(a.proxy || a.url)}" data-w="${a.w || 0}" data-h="${a.h || 0}"><button class="gstar${(FAVGIFS || []).some((x) => x.url === a.url) ? ' on' : ''}" title="Favourite">${I.star}</button><img src="${esc(a.proxy || a.url)}" data-full="${esc(a.url)}" alt="${esc(a.name)}" loading="lazy" decoding="async"${fit(a.w, a.h)}></span>`;
     if (t.startsWith('image/')) return `<img src="${esc(a.proxy || a.url)}" data-full="${esc(a.url)}" alt="${esc(a.name)}" loading="lazy" decoding="async"${fit(a.w, a.h)}>`;
-    if (t.startsWith('video/')) return `<video src="${esc(a.url)}" controls preload="metadata"${fit(a.w, a.h)}></video>`;
+    if (t.startsWith('video/')) { // no decoder until played: each loaded <video> holds a whole GStreamer pipeline in WebKit
+      const poster = a.proxy && /media\.discordapp\.net/.test(a.proxy) ? a.proxy + (a.proxy.includes('?') ? '&' : '?') + 'format=webp' : '';
+      return `<video src="${esc(a.url)}" controls preload="none"${poster ? ` poster="${esc(poster)}"` : ''}${fit(a.w, a.h)}></video>`; }
     if (t.startsWith('audio/')) return `<div class="file">${I.file}<div><a href="${esc(a.url)}">${esc(a.name)}</a> <span class="sz">${kb(a.size)}</span><audio src="${esc(a.url)}" controls preload="none"></audio></div></div>`;
     return `<div class="file">${I.file}<div><a href="${esc(a.url)}">${esc(a.name)}</a><div class="sz">${kb(a.size)}</div></div></div>`;
   }
@@ -1395,6 +1397,15 @@
   new MutationObserver(() => { for (const v of document.querySelectorAll('#log video.lazyv:not([data-w])')) { v.dataset.w = 1; vio.observe(v); } }).observe($('#log'), { childList: true, subtree: true });
   // the message box floats over the chat (like Discord); keep the newest message clear of it
   new ResizeObserver(() => { const h = $('#dock').offsetHeight; const sc = $('#scroller'); const stick = nearBottom(); sc.style.paddingBottom = (h + 2) + 'px'; if (stick) scrollBottom(); }).observe($('#dock'));
+  // a <video>/<audio> dropped from the page keeps its GStreamer pipeline (threads + decoded frames) until GC, often never: tear it down
+  const killMedia = (el) => { try { el.pause(); el.removeAttribute('src'); for (const x of el.querySelectorAll('source')) x.remove(); el.load(); } catch { /* gone */ } };
+  new MutationObserver((recs) => {
+    for (const r of recs) for (const n of r.removedNodes) {
+      if (n.nodeType !== 1) continue;
+      const list = n.matches('video, audio') ? [n] : n.querySelectorAll('video, audio');
+      for (const el of list) if (!el.isConnected) killMedia(el); // moved elements (background audio) are connected again by now
+    }
+  }).observe(document.body, { childList: true, subtree: true });
   // animated images (GIFs) hold every decoded frame in WebKit: unload them when they're well off screen so memory stays flat
   const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
   const animIO = new IntersectionObserver((ents) => {
