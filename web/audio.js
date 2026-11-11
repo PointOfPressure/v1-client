@@ -19,7 +19,8 @@ const WebVoice = (() => {
       return true;
     }
   }
-  const PRE = 1920, MAX = 9600, TRIM = 2880; // 40 ms to start, 200 ms ceiling, trimmed back to 60 ms
+  // per-user cushion starts at 60 ms; every hiccup (ran dry, audio back within 400 ms) adds 20 ms up to 200 ms, and it eases back after 20 s clean
+  const PRE0 = 2880, PREMAX = 9600, STEP = 960;
   class Mix extends AudioWorkletProcessor {
     constructor() {
       super(); this.q = new Map(); this.gain = new Map();
@@ -28,15 +29,17 @@ const WebVoice = (() => {
         if (d.t === 'gain') { this.gain.set(d.uid, d.g); return; }
         if (d.t === 'drop') { this.q.delete(d.uid); return; }
         let u = this.q.get(d.uid);
-        if (!u) { u = { c: [], off: 0, len: 0, on: false }; this.q.set(d.uid, u); }
+        if (!u) { u = { c: [], off: 0, len: 0, on: false, pre: PRE0, dry: -1, ok: currentTime }; this.q.set(d.uid, u); }
+        if (u.dry >= 0) { if (currentTime - u.dry < 0.4) { u.pre = Math.min(PREMAX, u.pre + STEP); u.ok = currentTime; } u.dry = -1; }
+        else if (currentTime - u.ok > 20 && u.pre > PRE0) { u.pre -= STEP; u.ok = currentTime; }
         u.c.push(d); u.len += d.l.length;
-        if (u.len > MAX) while (u.len > TRIM && u.c.length > 1) { const x = u.c.shift(); u.len -= x.l.length - u.off; u.off = 0; }
+        if (u.len > u.pre + 7200) while (u.len > u.pre + 960 && u.c.length > 1) { const x = u.c.shift(); u.len -= x.l.length - u.off; u.off = 0; }
       };
     }
     process(_in, outputs) {
       const L = outputs[0][0], R = outputs[0][1] || outputs[0][0], n = L.length;
       for (const [uid, u] of this.q) {
-        if (!u.on) { if (u.len >= PRE) u.on = true; else continue; }
+        if (!u.on) { if (u.len >= u.pre) u.on = true; else continue; }
         const g = this.gain.has(uid) ? this.gain.get(uid) : 1;
         let i = 0;
         while (i < n && u.c.length) {
@@ -45,7 +48,7 @@ const WebVoice = (() => {
           i += take; u.off += take; u.len -= take;
           if (u.off >= c.l.length) { u.c.shift(); u.off = 0; }
         }
-        if (i < n) u.on = false; // ran dry: build a cushion again before resuming
+        if (i < n) { u.on = false; u.dry = currentTime; } // ran dry: build a cushion again before resuming
       }
       return true;
     }
