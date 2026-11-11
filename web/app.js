@@ -1049,6 +1049,59 @@
   }
   $('#chans').addEventListener('mouseover', (e) => { const r = e.target.closest('[data-c], [data-vc]'); if (r) prefetch(r.dataset.c || r.dataset.vc, true); }, { passive: true });
   $('#rail').addEventListener('mouseover', (e) => { const b = e.target.closest('.srv[data-g]'); if (!b) return; const g = S.guilds.get(b.dataset.g); const last = store.get('chan.' + b.dataset.g); if (last) prefetch(last, true); else if (g) { const f = sortedChannels(g).find((c) => c.type !== CH.CAT && !isVoice(c)); if (f) prefetch(f.id, true); } }, { passive: true });
+  // forum / media channels: a list of posts (each post is a thread), like Discord
+  const ago = (ts) => { const m = Math.round((Date.now() - ts) / 6e4); return m < 1 ? 'now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : m < 43200 ? `${Math.round(m / 1440)}d ago` : new Date(ts).toLocaleDateString('en-GB'); };
+  const tagHTML = (t) => `<span class="ftag">${t.emojiId ? `<img class="emoji" src="https://cdn.discordapp.com/emojis/${t.emojiId}.webp?size=32" alt="">` : t.emoji ? `${esc(t.emoji)} ` : ''}${esc(t.name)}</span>`;
+  async function openForum(cid) {
+    const log = $('#log');
+    if (S.forum?.cid !== cid) log.innerHTML = '<div class="empty">Loading</div>';
+    let r; try { r = await api('GET', `/channels/${cid}/posts`); } catch (e) { if (S.cid === cid) log.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    if (S.cid !== cid) return;
+    S.forum = { cid, ...r, q: S.forum?.cid === cid ? S.forum.q : '', tag: S.forum?.cid === cid ? S.forum.tag : null, making: false, pick: new Set() };
+    paintForum(true); $('#scroller').scrollTop = 0;
+  }
+  function paintForum(full) {
+    const F = S.forum, c = chan(F.cid), log = $('#log');
+    const q = F.q.toLowerCase();
+    const list = F.posts.filter((p) => (!q || p.name.toLowerCase().includes(q) || p.preview.toLowerCase().includes(q)) && (!F.tag || p.tags.some((t) => t.id === F.tag)));
+    const cards = list.map((p) => `<div class="fpost" data-post="${p.id}"><div class="fbody">`
+      + `<div class="ftitle">${p.pinned ? `<span class="fpin">${I.pin}</span>` : ''}${esc(p.name)}${p.locked ? ' 🔒' : ''}</div>`
+      + (p.tags.length ? `<div class="ftags">${p.tags.map(tagHTML).join('')}</div>` : '')
+      + `<div class="fprev"><b>${esc(p.owner ? nickOf(p.owner) || p.owner.name : 'Unknown')}</b>: ${p.preview ? MD.renderInline(p.preview.replace(/\n+/g, ' ')) : '(no text)'}</div>`
+      + `<div class="fmeta"><span>${I.chat}${p.count}</span><span>${ago(p.lastTs)}</span>${p.archived ? '<span>Closed</span>' : ''}</div></div>`
+      + (p.image ? `<img class="fimg" src="${esc(p.image)}" alt="" loading="lazy">` : '') + '</div>').join('');
+    const body = cards || `<div class="empty">${F.posts.length ? 'No posts match' : 'No posts yet'}</div>`;
+    if (!full && log.querySelector('.fposts')) { log.querySelector('.fposts').innerHTML = body; return; }
+    const tags = F.tags.length ? `<div class="ftagbar">${F.tags.map((t) => `<button class="ftagb${F.tag === t.id ? ' on' : ''}" data-ftag="${t.id}">${tagHTML(t)}</button>`).join('')}</div>` : '';
+    const maker = F.making ? `<div class="fmake"><input id="fmtitle" maxlength="100" placeholder="Post title" value="${esc(F.q)}"><textarea id="fmbody" rows="4" maxlength="2000" placeholder="Write the post"></textarea>`
+      + (F.tags.length ? `<div class="ftagbar">${F.tags.map((t) => `<button class="ftagb${F.pick.has(t.id) ? ' on' : ''}" data-fpick="${t.id}">${tagHTML(t)}</button>`).join('')}</div>` : '')
+      + `<div class="fmrow"><button class="btn sec" id="fmcancel">Cancel</button><button class="btn" id="fmpost">Post</button></div></div>` : '';
+    log.innerHTML = `<div class="fhead"><input id="fq" placeholder="Search or create a post" value="${esc(F.q)}">${c?.send ? '<button class="btn" id="fnew">New Post</button>' : ''}</div>${tags}${maker}<div class="fposts">${body}</div>`;
+    if (F.making) $('#fmtitle').focus();
+  }
+  function openPost(p) {
+    const g = S.guilds.get(S.gid);
+    if (g && !g.channels.some((x) => x.id === p.id)) g.channels.push({ ...p, thread: true, post: true });
+    openChannel(p.id);
+  }
+  $('#log').addEventListener('input', (e) => { if (e.target.id === 'fq' && S.forum) { S.forum.q = e.target.value; paintForum(); } });
+  $('#log').addEventListener('keydown', (e) => {
+    if (e.target.id === 'fq' && e.key === 'Enter' && chan(S.forum?.cid)?.send) { S.forum.making = true; paintForum(true); }
+    if (e.target.id === 'fmtitle' && e.key === 'Enter') { e.preventDefault(); $('#fmbody').focus(); }
+  });
+  $('#log').addEventListener('click', async (e) => {
+    const F = S.forum; if (!F || !$('#log').classList.contains('forum')) return;
+    const post = e.target.closest('[data-post]'); if (post) { const p = F.posts.find((x) => x.id === post.dataset.post); if (p) openPost(p); return; }
+    const tg = e.target.closest('[data-ftag]'); if (tg) { F.tag = F.tag === tg.dataset.ftag ? null : tg.dataset.ftag; paintForum(true); return; }
+    const pk = e.target.closest('[data-fpick]'); if (pk) { const id = pk.dataset.fpick; F.pick.has(id) ? F.pick.delete(id) : F.pick.add(id); pk.classList.toggle('on'); return; }
+    if (e.target.closest('#fnew')) { F.making = true; paintForum(true); return; }
+    if (e.target.closest('#fmcancel')) { F.making = false; paintForum(true); return; }
+    const go = e.target.closest('#fmpost'); if (!go) return;
+    const name = $('#fmtitle').value.trim(); if (!name) { $('#fmtitle').focus(); return; }
+    go.disabled = true;
+    try { const r = await api('POST', `/channels/${F.cid}/posts`, { name, content: $('#fmbody').value.trim(), tags: [...F.pick] }); F.making = false; F.q = ''; openPost(r.post); }
+    catch (x) { go.disabled = false; toast(x.message, true); }
+  });
   async function openChannel(cid) {
     if (S.cid && S.cid !== cid) { saveDraft(S.cid); ta.value = ''; autosize(); }
     S.readAt = { [cid]: READ[cid] }; // where the NEW line goes
@@ -1064,6 +1117,9 @@
     ta.placeholder = c && !c.send ? 'V1 cannot send messages here' : c?.type === CH.DM ? `Message @${c.name}` : `Message ${isVoice(c) ? '' : '#'}${c?.name ?? ''}`;
     S.lru = [cid, ...S.lru.filter((x) => x !== cid)];
     for (const old of S.lru.splice(80)) { S.msgs.delete(old); S.more.delete(old); S.ahead.delete(old); } // keep memory flat
+    const isForum = c?.type === 15 || c?.type === 16;
+    $('#log').classList.toggle('forum', isForum); $('#composer').hidden = isForum;
+    if (isForum) { openForum(cid); return; }
     if (!S.msgs.has(cid)) {
       $('#log').innerHTML = '<div class="empty">Loading</div>';
       try { await fetchChan(cid); }
@@ -1087,7 +1143,7 @@
       + (NATIVE && on('ClaudeAssistant') ? `<button class="ico${CL.open ? ' on' : ''}" id="tclaude" title="Claude">${I.spark}</button>` : '')
       + (S.gid === DMG ? '' : `<div class="hsearch"><input id="hsq" placeholder="Search ${esc(S.guilds.get(S.gid)?.name ?? '')}" title="Type to filter members. Enter searches every message (from: in: has:link before: after:)">${I.search}</div>`);
     if (!c) { $('#chead').innerHTML = `<span class="sp"></span>${toggle}`; return; }
-    const icon = c.type === CH.DM ? avatarHTML(c.dm.user, statusOf(c.dm.user.id), 24) : isVoice(c) ? I.speaker : I.hash;
+    const icon = c.type === CH.DM ? avatarHTML(c.dm.user, statusOf(c.dm.user.id), 24) : isVoice(c) ? I.speaker : c.type === 15 || c.type === 16 ? I.forum : c.thread ? I.threads : I.hash;
     $('#chead').innerHTML = `${icon}<span class="nm">${esc(c.name)}</span>${c.topic ? `<span class="topic" title="${esc(c.topic)}">${MD.renderInline(c.topic)}</span>` : '<span class="sp"></span>'}${toggle}`;
     twe($('#chead'));
   }
@@ -1278,6 +1334,7 @@
     paint();
   }
   function renderLog() {
+    if (S.forum?.cid === S.cid && $('#log').classList.contains('forum')) { paintForum(); return; }
     rescueAudio();
     const list = S.msgs.get(S.cid) || [];
     const c = chan(S.cid);

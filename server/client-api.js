@@ -92,6 +92,7 @@ async function backfillStep() { // one request at a time, ~3 per second: well in
 }
 // every thread V1 can read: active ones plus each channel's archived ones (public, and private where it manages threads)
 const THR = new Map(); let thrScanned = false;
+const starterCache = new Map(); // forum post id -> { text, image, author }
 const nap = (ms) => new Promise((ok) => setTimeout(ok, ms));
 function noteThread(t) { if (!t?.parentId) return; IDX?.thr.run(t.id, t.parentId, t.guildId, t.name); THR.set(t.id, t); }
 async function scanThreads() {
@@ -833,6 +834,38 @@ async function route(req, res) {
     const ch = await u.createDM();
     rememberDM(u.id);
     return reply(res, 200, { dm: dmInfo(ch) });
+  }
+  if (p[1] === 'channels' && p[2] && p[3] === 'posts') { // forum / media channel: its posts are threads
+    const ch = client.channels.cache.get(p[2]) ?? await client.channels.fetch(p[2]).catch(() => null);
+    if (!ch || ![ChannelType.GuildForum, ChannelType.GuildMedia].includes(ch.type)) return reply(res, 404, { error: 'That isn\'t a forum channel.' });
+    if (!canSee(ch)) return reply(res, 404, { error: 'V1 can\'t see that channel (no View Channel permission).' });
+    if (M === 'POST') {
+      const b = await body(req);
+      const name = String(b.name || '').trim().slice(0, 100); if (!name) return reply(res, 400, { error: 'A post needs a title.' });
+      const t = await ch.threads.create({ name, message: { content: String(b.content || '').slice(0, 2000) || name }, appliedTags: (b.tags ?? []).slice(0, 5) });
+      return reply(res, 200, { post: { ...chanInfo(t), thread: true } });
+    }
+    const act = await ch.threads.fetchActive().catch(() => null);
+    const arc = await ch.threads.fetchArchived({ limit: 50 }).catch(() => null);
+    const all = new Map(); for (const src of [act?.threads, arc?.threads]) src?.forEach((t) => { if (t.parentId === ch.id && canSee(t)) all.set(t.id, t); });
+    const tagOf = new Map(ch.availableTags.map((t) => [t.id, { id: t.id, name: t.name, emoji: t.emoji?.name ?? null, emojiId: t.emoji?.id ?? null }]));
+    const lastTs = (t) => (t.lastMessageId ? Number((BigInt(t.lastMessageId) >> 22n) + 1420070400000n) : t.createdTimestamp);
+    const list = [...all.values()].sort((a, b) => (b.flags?.has?.('Pinned') - a.flags?.has?.('Pinned')) || lastTs(b) - lastTs(a)).slice(0, 60);
+    await Promise.all(list.slice(0, 40).map(async (t) => { // first message = the post body; cached, it rarely changes
+      if (starterCache.has(t.id)) return;
+      const m = await t.fetchStarterMessage().catch(() => null);
+      const img = m?.attachments.find((a) => /^image\//.test(a.contentType || '') || /\.(png|jpe?g|gif|webp)$/i.test(a.name || ''));
+      starterCache.set(t.id, { text: (m?.content || m?.embeds[0]?.description || '').slice(0, 300), image: img ? img.proxyURL : (m?.embeds.find((e) => e.image || e.thumbnail)?.image?.proxyURL ?? null), author: m?.author ?? null });
+      if (starterCache.size > 2000) starterCache.delete(starterCache.keys().next().value);
+    }));
+    const posts = await Promise.all(list.map(async (t) => {
+      const st = starterCache.get(t.id);
+      const owner = st?.author ?? client.users.cache.get(t.ownerId) ?? await client.users.fetch(t.ownerId).catch(() => null);
+      return { ...chanInfo(t), thread: true, owner: who(owner, ch.guild), count: t.messageCount ?? 0, created: t.createdTimestamp, lastTs: lastTs(t),
+        archived: !!t.archived, pinned: !!t.flags?.has?.('Pinned'), tags: (t.appliedTags || []).map((x) => tagOf.get(x)).filter(Boolean),
+        preview: st?.text ?? '', image: st?.image ?? null };
+    }));
+    return reply(res, 200, { posts, tags: [...tagOf.values()], media: ch.type === ChannelType.GuildMedia, guidelines: ch.topic ?? null });
   }
   if (p[1] === 'channels' && p[2]) {
     const ch = await textChannel(p[2]);
