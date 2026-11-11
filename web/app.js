@@ -1143,7 +1143,7 @@
       + (NATIVE && on('ClaudeAssistant') ? `<button class="ico${CL.open ? ' on' : ''}" id="tclaude" title="Claude">${I.spark}</button>` : '')
       + (S.gid === DMG ? '' : `<div class="hsearch"><input id="hsq" placeholder="Search ${esc(S.guilds.get(S.gid)?.name ?? '')}" title="Type to filter members. Enter searches every message (from: in: has:link before: after:)">${I.search}</div>`);
     if (!c) { $('#chead').innerHTML = `<span class="sp"></span>${toggle}`; return; }
-    const icon = c.type === CH.DM ? avatarHTML(c.dm.user, statusOf(c.dm.user.id), 24) : isVoice(c) ? I.speaker : c.type === 15 || c.type === 16 ? I.forum : c.thread ? I.threads : I.hash;
+    const icon = c.type === CH.DM ? avatarHTML(c.dm.user, statusOf(c.dm.user.id), 24) : isVoice(c) ? I.speaker : c.type === 15 || c.type === 16 ? I.forum : c.thread ? I.threads.replace('<svg', '<svg class="hash"') : I.hash;
     $('#chead').innerHTML = `${icon}<span class="nm">${esc(c.name)}</span>${c.topic ? `<span class="topic" title="${esc(c.topic)}">${MD.renderInline(c.topic)}</span>` : '<span class="sp"></span>'}${toggle}`;
     twe($('#chead'));
   }
@@ -1342,6 +1342,7 @@
     const c = chan(S.cid);
     const start = c?.type === CH.DM
       ? `<div class="chanstart"><div class="big"><img src="${esc(px(c.dm.user.avatar, 68))}" alt=""></div><h1>${esc(c.name)}</h1><div>This is the beginning of V1's direct messages with <b>${esc(c.name)}</b>.</div></div>`
+      : c?.thread ? `<div class="chanstart"><div class="big">${c.post ? I.forum : I.threads.replace('<svg', '<svg class="hash"')}</div><h1>${esc(c.name)}</h1><div>${c.post && c.owner ? `Started by ${esc(nickOf(c.owner) || c.owner.name)}` : 'This is the start of the thread.'}</div></div>`
       : `<div class="chanstart"><div class="big">${isVoice(c) ? I.speaker : I.hash}</div><h1>Welcome to #${esc(c?.name ?? '')}</h1><div>This is the start of the #${esc(c?.name ?? '')} channel.</div></div>`;
     let html = S.more.get(S.cid) ? '<div class="loadmore">Loading older messages</div>' : start;
     const lastRead = S.readAt?.[S.cid];
